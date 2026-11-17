@@ -171,6 +171,19 @@ class ThemeTab(QWidget):
         """)
         ui_layout.addWidget(self.hide_toggles_check)
 
+        # Status bar at the bottom of the main window
+        self.status_bar_check = QCheckBox("Show status bar")
+        self.status_bar_check.setToolTip(
+            "Bottom bar with short messages. Hidden, the panels reach the window's\n"
+            "bottom edge and errors are shown in a dialog instead."
+        )
+        self.status_bar_check.setStyleSheet(self.hide_toggles_check.styleSheet())
+        self.status_bar_check.setChecked(
+            QSettings(Config.APP_AUTHOR, Config.APP_NAME).value("view/show_status_bar", True, type=bool)
+        )
+        self.status_bar_check.toggled.connect(self._on_status_bar_toggled)
+        ui_layout.addWidget(self.status_bar_check)
+
         # Animated previews - mirrors the header's "Previews" toggle. Here too
         # because a toggle only in the toolbar is easy to never notice, and this
         # is where people look for display preferences.
@@ -363,6 +376,11 @@ class ThemeTab(QWidget):
         AnimationView.wheel_step_px = value  # takes effect on the next wheel notch
         QSettings(Config.APP_AUTHOR, Config.APP_NAME).setValue(
             AnimationView.WHEEL_SETTINGS_KEY, value)
+
+    def _on_status_bar_toggled(self, visible: bool):
+        QSettings(Config.APP_AUTHOR, Config.APP_NAME).setValue("view/show_status_bar", visible)
+        from ...events.event_bus import get_event_bus
+        get_event_bus().settings_changed.emit("show_status_bar", visible)
 
     def _on_hide_toggles_changed(self, state: int):
         """

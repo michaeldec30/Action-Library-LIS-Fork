@@ -209,6 +209,11 @@ class MainWindow(QMainWindow):
         # Status bar
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
+        # Optional (Settings > Appearance). Hidden, the panels reach the bottom edge;
+        # controllers still call showMessage() on it, errors then go to a dialog.
+        self._status_bar.setVisible(
+            QSettings(Config.APP_AUTHOR, Config.APP_NAME).value("view/show_status_bar", True, type=bool)
+        )
         self._status_bar.showMessage("Ready")
 
     def _create_layout(self):
@@ -1769,10 +1774,15 @@ class MainWindow(QMainWindow):
     def _on_error(self, error_type: str, error_message: str):
         """Handle error"""
         self._status_bar.showMessage(f"Error: {error_message}")
+        if not self._status_bar.isVisible():
+            # Status bar hidden: the error would vanish silently - show it.
+            QMessageBox.warning(self, "Action Library", error_message)
 
     def _on_settings_changed(self, setting_name: str, value):
         """Handle settings changes from settings dialog"""
-        if setting_name == "hide_shortcut_toggles":
+        if setting_name == "show_status_bar":
+            self._status_bar.setVisible(bool(value))
+        elif setting_name == "hide_shortcut_toggles":
             # Update apply panel toggles visibility
             self._apply_panel.set_shortcut_toggles_visible(not value)
 
