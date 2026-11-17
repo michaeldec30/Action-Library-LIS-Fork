@@ -58,6 +58,14 @@ class AnimationFilterProxyModel(QSortFilterProxyModel):
         self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.setDynamicSortFilter(True)  # Auto-refilter on data changes
 
+        #Clean Home
+        self._unfiled_only = False
+
+    def set_unfiled_only(self, enabled: bool):
+            if self._unfiled_only != enabled:
+                self._unfiled_only = enabled
+                self.invalidateFilter()
+
     def set_search_text(self, text: str):
         """
         Set search text filter
@@ -106,6 +114,10 @@ class AnimationFilterProxyModel(QSortFilterProxyModel):
         if self._folder_name != folder_name:
             self._folder_name = folder_name
             changed = True
+
+        if self._unfiled_only:
+            self._unfiled_only = False
+            changed = True    
 
         if changed:
             self.invalidateFilter()
@@ -265,6 +277,10 @@ class AnimationFilterProxyModel(QSortFilterProxyModel):
         if self._animations_only:
             self._animations_only = False
             changed = True
+        
+        if self._unfiled_only:
+            self._unfiled_only = False
+            changed = True
 
         if changed:
             self.invalidateFilter()
@@ -286,6 +302,11 @@ class AnimationFilterProxyModel(QSortFilterProxyModel):
 
         index = source_model.index(source_row, 0, source_parent)
 
+        if self._unfiled_only:
+            uuid = source_model.data(index, AnimationRole.UUIDRole)
+            if self._membership.get(uuid):
+                return False
+            
         # Favorites only filter
         if self._favorites_only:
             is_favorite = source_model.data(index, AnimationRole.IsFavoriteRole)
@@ -443,10 +464,11 @@ class AnimationFilterProxyModel(QSortFilterProxyModel):
     def has_active_filters(self) -> bool:
         """Check if any filters are active"""
         return bool(
-            self._search_text or
-            self._folder_id is not None or
-            self._filter_tags or
-            self._filter_rig_types
+            self._search_text
+            or self._folder_id is not None
+            or self._filter_tags
+            or self._filter_rig_types
+            or self._unfiled_only
         )
 
 

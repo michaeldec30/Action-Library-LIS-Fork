@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
         # Startup is just "bind to the configured library" - the exact same path
         # a switch takes, so the switch path is exercised on every launch.
         self._load_library(initial=True)
+        self._on_folder_selected(-1, 'Home', True)
 
     def _setup_window(self):
         """Configure window properties"""
@@ -1095,10 +1096,12 @@ class MainWindow(QMainWindow):
         self._bulk_edit_toolbar.set_special_view_mode()  # Reset to normal mode
 
         if is_virtual:
-            # Built-in views. Name-matching is safe here precisely because we
-            # know these have no folder_id - they're ours, not the user's.
-            self._filter_ctrl.clear_folder_filter()
-            if folder_name == "Actions":
+            if folder_name == 'Home':
+                self._filter_ctrl.set_unfiled_only(True)
+            else:
+                self._filter_ctrl.clear_folder_filter()
+
+            if folder_name == 'Actions':
                 self._filter_ctrl.set_animations_only(True)
             elif folder_name == "Poses":
                 self._filter_ctrl.set_poses_only(True)
@@ -1705,7 +1708,7 @@ class MainWindow(QMainWindow):
                 folder_name = data.get('folder_name')
                 # Reapply current filter
                 if folder_name == "Home":
-                    self._filter_ctrl.clear_folder_filter()
+                    self._filter_ctrl.set_unfiled_only(True)
                 else:
                     folder_item_id = data.get('folder_id')
                     if folder_item_id:

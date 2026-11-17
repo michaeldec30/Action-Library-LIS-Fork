@@ -31,6 +31,13 @@ class FilterController:
         self._status_bar = status_bar
         self._current_context: Optional[str] = None
 
+    def set_unfiled_only(self, enabled: bool) -> None:
+        if enabled:
+            self._proxy.set_folder_filter(None, None, None)
+
+        self._proxy.set_unfiled_only(enabled)
+        self._update_status()
+
     def get_current_folder_id(self) -> Optional[int]:
         """The user folder currently selected, or None for Home/virtual folders.
 
@@ -158,8 +165,9 @@ class FilterController:
 
     def clear_folder_filter(self) -> None:
         """Clear folder filter to show all animations."""
+        self._proxy.set_unfiled_only(False)
         self._proxy.set_folder_filter(None, None, None)
-        self._current_context = "Home"
+        self._current_context = 'Home'
         self._update_status()
 
     def clear_all_filters(self) -> None:
