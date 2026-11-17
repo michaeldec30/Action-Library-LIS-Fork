@@ -1082,6 +1082,15 @@ class MainWindow(QMainWindow):
         """
         is_virtual = folder_id is None or folder_id < 0
 
+        # Start every newly opened folder at the top. Only on a real switch: if the
+        # same folder is re-selected (tree refresh after a move/archive) the
+        # scroll position stays where it was.
+        folder_key = (folder_id, folder_name, recursive)
+        folder_switched = folder_key != getattr(self, '_last_folder_key', None)
+        self._last_folder_key = folder_key
+        if folder_switched:
+            QTimer.singleShot(0, self._animation_view.scrollToTop)
+
         # Clear special filters first
         self._filter_ctrl.clear_special_filters()
 
