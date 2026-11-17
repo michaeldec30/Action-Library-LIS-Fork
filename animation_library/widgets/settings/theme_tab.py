@@ -107,6 +107,26 @@ class ThemeTab(QWidget):
         folder_size_row.addStretch()
         ui_layout.addLayout(folder_size_row)
 
+        # Mouse wheel scroll step for the card grid (saved immediately, like the rest)
+        from ...views.animation_view import AnimationView
+        wheel_row = QHBoxLayout()
+        wheel_row.addWidget(QLabel("Mouse Wheel Scroll:"))
+        self.wheel_step_spinbox = QSpinBox()
+        self.wheel_step_spinbox.setRange(0, 2000)
+        self.wheel_step_spinbox.setSingleStep(10)
+        self.wheel_step_spinbox.setSuffix(" px")
+        self.wheel_step_spinbox.setSpecialValueText("Qt default")
+        self.wheel_step_spinbox.setFixedWidth(100)
+        self.wheel_step_spinbox.setToolTip(
+            "How far the card grid scrolls per mouse wheel notch.\n"
+            "Smaller = slower. 0 = Qt default (about three card rows)."
+        )
+        self.wheel_step_spinbox.setValue(AnimationView.get_wheel_step_px())
+        self.wheel_step_spinbox.valueChanged.connect(self._on_wheel_step_changed)
+        wheel_row.addWidget(self.wheel_step_spinbox)
+        wheel_row.addStretch()
+        ui_layout.addLayout(wheel_row)
+
         # Hide shortcut toggles (power user mode)
         self.hide_toggles_check = QCheckBox("Hide Mirror/Slots toggles (use keyboard shortcuts)")
         self.hide_toggles_check.setToolTip(
@@ -337,6 +357,12 @@ class ThemeTab(QWidget):
             size: New font size in points
         """
         self.theme_manager.set_folder_text_size(size)
+
+    def _on_wheel_step_changed(self, value: int):
+        from ...views.animation_view import AnimationView
+        AnimationView.wheel_step_px = value  # takes effect on the next wheel notch
+        QSettings(Config.APP_AUTHOR, Config.APP_NAME).setValue(
+            AnimationView.WHEEL_SETTINGS_KEY, value)
 
     def _on_hide_toggles_changed(self, state: int):
         """

@@ -9,8 +9,8 @@ import logging
 import os
 from typing import Optional
 from PyQt6.QtWidgets import QListView, QAbstractItemView
-from PyQt6.QtCore import Qt, QTimer, QModelIndex, pyqtSignal, QPoint, QSize
-from PyQt6.QtGui import QResizeEvent, QMouseEvent, QKeyEvent, QPainter, QColor, QFont
+from PyQt6.QtCore import Qt, QTimer, QModelIndex, pyqtSignal, QPoint, QSize, QSettings
+from PyQt6.QtGui import QResizeEvent, QMouseEvent, QKeyEvent, QPainter, QColor, QFont, QWheelEvent
 
 from .animation_card_delegate import AnimationCardDelegate
 from ..models.animation_list_model import AnimationRole
@@ -305,6 +305,33 @@ class AnimationView(QListView):
             return
 
         super().mouseReleaseEvent(event)
+
+    # Mouse wheel step in pixels per notch (Settings > Appearance). Qt's default in
+    # pixel-scroll mode is ~3 card rows per notch - far too jumpy for a card grid.
+    # 0 = keep Qt's default behaviour.
+    WHEEL_SETTINGS_KEY = "view/wheel_scroll_px"
+    WHEEL_DEFAULT_PX = 120
+    wheel_step_px = None  # class-wide cache, set by the settings tab on change
+
+    @classmethod
+    def get_wheel_step_px(cls) -> int:
+        if cls.wheel_step_px is None:
+            cls.wheel_step_px = QSettings(Config.APP_AUTHOR, Config.APP_NAME).value(
+                cls.WHEEL_SETTINGS_KEY, cls.WHEEL_DEFAULT_PX, type=int)
+        return cls.wheel_step_px
+
+    def wheelEvent(self, event: QWheelEvent):
+        step = self.get_wheel_step_px()
+        delta = event.angleDelta().y()
+        # Touchpads send pixel deltas and Ctrl+wheel may mean zoom elsewhere: leave
+        # both to Qt. 120 angle units = one wheel notch (hi-res wheels send less).
+        if (step <= 0 or delta == 0 or not event.pixelDelta().isNull()
+                or event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            super().wheelEvent(event)
+            return
+        bar = self.verticalScrollBar()
+        bar.setValue(bar.value() - round(delta * step / 120))
+        event.accept()
 
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key press for pose blending cancel"""
