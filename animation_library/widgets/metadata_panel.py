@@ -1178,6 +1178,19 @@ class MetadataPanel(QWidget):
             self._version_count_label.hide()
             self._history_btn.setEnabled(False)
 
+    def set_selection_provider(self, provider):
+        """Callable returning the selected animation UUIDs (set by MainWindow).
+
+        Lets the status menu act on the whole multi-selection instead of only the
+        card shown in this panel.
+        """
+        self._selection_provider = provider
+
+    def _status_targets(self, uuid):
+        provider = getattr(self, '_selection_provider', None)
+        selected = provider() if provider else []
+        return selected if (uuid in selected and len(selected) > 1) else [uuid]
+
     def _on_status_badge_clicked(self):
         """Show status selection menu when badge is clicked"""
         if not self._animation:
@@ -1186,6 +1199,12 @@ class MetadataPanel(QWidget):
         menu = QMenu(self)
 
         current_status = self._animation.get('status', 'wip')
+
+        n = len(self._status_targets(self._animation.get('uuid')))
+        if n > 1:
+            header = menu.addAction(f"Set for {n} selected")
+            header.setEnabled(False)
+            menu.addSeparator()
 
         # Add status options
         for status_key, status_info in Config.LIFECYCLE_STATUSES.items():
@@ -1218,16 +1237,20 @@ class MetadataPanel(QWidget):
         from ..services.database_service import get_database_service
         db_service = self._get_db_service()
 
-        if db_service.set_status(uuid, status):
-            # Update local animation data
-            self._animation['status'] = status
+        targets = self._status_targets(uuid)
+        failed = 0
+        for u in targets:
+            if db_service.set_status(u, status):
+                if u == uuid:
+                    # Update local animation data and badge appearance
+                    self._animation['status'] = status
+                    self._update_status_badge_style(status)
+                # Notify via event bus
+                self._event_bus.animation_updated.emit(u)
+            else:
+                failed += 1
 
-            # Update badge appearance
-            self._update_status_badge_style(status)
-
-            # Notify via event bus
-            self._event_bus.animation_updated.emit(uuid)
-        else:
+        if failed:
             # The write was rejected - most commonly because status is read-only
             # in Pipeline mode (controlled by Pipeline Control), or a DB lock.
             # Surface it instead of failing silently.

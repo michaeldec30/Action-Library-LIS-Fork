@@ -199,6 +199,9 @@ class MainWindow(QMainWindow):
 
         # Metadata panel (right panel)
         self._metadata_panel = MetadataPanel()
+        self._metadata_panel.set_selection_provider(
+            lambda: self._animation_view.get_selected_uuids()
+        )
 
         # Apply panel (below metadata)
         self._apply_panel = ApplyPanel()
