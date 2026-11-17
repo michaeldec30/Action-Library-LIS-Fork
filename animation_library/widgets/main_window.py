@@ -1328,6 +1328,14 @@ class MainWindow(QMainWindow):
                     lambda: self._remove_from_folder(in_folder, current_folder_id)
                 )
 
+        # Move to Folder = Add to Folder + Remove from the folder being viewed, in one step.
+        # Outside a real folder (Home, virtual folders) there's nothing to remove from,
+        # so it just adds.
+        move_action = menu.addAction(f"Move to Folder{suffix}...")
+        move_action.triggered.connect(
+            lambda: self._move_to_folder(targets, current_folder_id)
+        )
+
         menu.addSeparator()
 
         # Delete/Archive action based on mode
@@ -1386,6 +1394,43 @@ class MainWindow(QMainWindow):
             f"Added {', '.join(new_tags)} to {updated} animation(s)"
             if updated else "No tags added (already present)"
         )
+
+    def _move_to_folder(self, uuids: List[str], source_folder_id):
+        """Pick a folder, add the animations to it, take them out of source_folder_id."""
+        from .dialogs.folder_picker_dialog import FolderPickerDialog
+
+        folders = [(f['id'], f.get('path') or f['name'])
+                   for f in self._db_service.get_all_folders() if f.get('parent_id')]
+        if source_folder_id:
+            folders = [f for f in folders if f[0] != source_folder_id]
+        if not folders:
+            return
+        dialog = FolderPickerDialog(folders, parent=self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        target_id = dialog.selected_folder_id()
+        if not target_id:
+            return
+        target = self._db_service.get_folder_by_id(target_id) or {}
+        target_label = target.get('path') or target.get('name', 'folder')
+
+        moved = 0
+        for u in uuids:
+            in_source = bool(source_folder_id) and source_folder_id in set(
+                self._db_service.get_folders_for_animation(u)
+            )
+            # Remove first, then add: removing drops the source folder's name tag,
+            # and the target may have the same name (e.g. 'Adult/Baby' -> 'Baby').
+            if in_source:
+                self._db_service.remove_animation_from_folder(u, source_folder_id)
+            if self._db_service.move_animation_to_folder(u, target_id):
+                moved += 1
+            elif in_source:
+                # Add failed: put it back so the animation isn't left folderless.
+                self._db_service.move_animation_to_folder(u, source_folder_id)
+
+        self._on_folder_animations_changed()
+        self._status_bar.showMessage(f"Moved {moved} animation(s) to '{target_label}'")
 
     def _set_favorite(self, uuids: List[str], is_favorite: bool):
         """Set favorite on several animations at once (context menu on a selection)."""
