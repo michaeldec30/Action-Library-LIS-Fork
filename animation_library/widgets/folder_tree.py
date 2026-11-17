@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 FolderTree - Folder navigation tree
 

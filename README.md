@@ -1,3 +1,5 @@
+> **Action Library LIS Fork** — a fork of [Action Library](https://github.com/CGstuff/Action-Library) by CGstuff (based on 1.6.2), with fixes and workflow additions. See [FORK_CHANGES.md](FORK_CHANGES.md). GPL v3, like the original.
+
 <p align="center">
   <img src="assets/Icon.png" alt="Action Library" width="128" height="128">
 </p>

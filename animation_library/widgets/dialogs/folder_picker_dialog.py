@@ -1,3 +1,4 @@
+# Action Library LIS Fork - new file, 2026-11-17. GPL-3.0, see LICENSE and FORK_CHANGES.md.
 """Folder picker with a filter box, for "Move to Folder" in the card context menu.
 
 Shows full folder paths (e.g. 'Adult/Baby'), because names repeat across the
