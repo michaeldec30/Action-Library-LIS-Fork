@@ -586,6 +586,14 @@ class FolderTree(QTreeWidget):
 
     def _on_folder_selected_external(self, folder_name: str):
         """Handle folder selection from event bus"""
+        # The bus carries only the folder name, and nested folders (Adult/Baby) can share it
+        # with a top-level one (Baby). If the selected item already has this name, the event
+        # came from this tree itself - don't jump to the top-level namesake.
+        selected = self.selectedItems()
+        if selected:
+            data = selected[0].data(0, Qt.ItemDataRole.UserRole)
+            if data and data.get('folder_name') == folder_name:
+                return
 
         # Find item with this name
         for i in range(self.topLevelItemCount()):
