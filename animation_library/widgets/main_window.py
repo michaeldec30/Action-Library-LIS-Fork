@@ -1412,6 +1412,13 @@ class MainWindow(QMainWindow):
         # Use the archive trash controller
         self._archive_trash_ctrl.archive_animations([uuid])
 
+    def _release_video_handles(self):
+        """Close video files held open by the preview panel and the hover popup."""
+        self._metadata_panel.clear()
+        popup = getattr(self._animation_view, '_hover_popup', None)
+        if popup:
+            popup.hide_preview()
+
     def _instant_delete_animation(self, uuid: str):
         """Instantly delete a single animation via context menu (Solo Mode)"""
         animation = self._animation_model.get_animation_by_uuid(uuid)
@@ -1427,8 +1434,9 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Clear metadata panel to release video file handles
-        self._metadata_panel.clear()
+        # Release every open video handle (metadata preview AND hover popup): on Windows
+        # an open .webm pins the folder and instant_delete would leave it behind.
+        self._release_video_handles()
 
         # Delete
         success, message = self._archive_service.instant_delete(uuid)
@@ -1486,8 +1494,9 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Clear metadata panel to release video file handles
-        self._metadata_panel.clear()
+        # Release every open video handle (metadata preview AND hover popup): on Windows
+        # an open .webm pins the folder and instant_delete would leave it behind.
+        self._release_video_handles()
 
         # Delete each animation
         deleted = 0

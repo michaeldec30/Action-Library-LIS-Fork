@@ -219,8 +219,12 @@ class ArchiveTrashController:
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Clear metadata panel to release video file handles
+        # Release video file handles: the metadata preview AND the hover popup. The popup
+        # keeps the card's .webm open (Windows lock), so archiving would leave it behind.
         self._metadata_panel.clear()
+        popup = getattr(self._animation_view, '_hover_popup', None)
+        if popup:
+            popup.hide_preview()
 
         # Move to archive
         archived = 0

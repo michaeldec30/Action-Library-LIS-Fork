@@ -10,6 +10,7 @@ Provides archive functionality:
 import shutil
 import logging
 import gc
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -57,6 +58,28 @@ def _get_unique_folder_name(base_folder: Path, desired_name: str) -> Path:
             import uuid
             return base_folder / f"{desired_name}_{uuid.uuid4().hex[:8]}"
 
+
+
+def _rmtree_with_retry(folder: Path, attempts: int = 5, delay: float = 0.3) -> bool:
+    """shutil.rmtree that survives briefly locked files.
+
+    On Windows a video still open in a preview player (OpenCV) blocks deleting its
+    .webm; rmtree then removes everything else and leaves the folder half-deleted.
+    Handles are usually released a moment later, so retry before giving up.
+    """
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(folder)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError as e:  # PermissionError is an OSError
+            if attempt == attempts - 1:
+                logger.warning(f"rmtree failed after {attempts} attempts for {folder}: {e}")
+                return False
+            gc.collect()
+            time.sleep(delay)
+    return False
 
 class ArchiveService:
     """
@@ -176,8 +199,16 @@ class ArchiveService:
             # survivor so the lineage doesn't vanish from the grid.
             self._promote_survivor_if_latest(animation)
 
-            # Try to delete original files
+            # Try to delete original files. A .webm still open in a preview player is
+            # released a moment later on Windows, so retry before leaving a half-empty
+            # folder behind (it would block re-exporting an animation with this name).
             still_locked = safe_delete_folder_contents(source_folder, skip_files=failed_files)
+            for _ in range(4):
+                if not still_locked or set(still_locked) <= set(failed_files):
+                    break
+                gc.collect()
+                time.sleep(0.3)
+                still_locked = safe_delete_folder_contents(source_folder, skip_files=failed_files)
 
             if still_locked:
                 logger.info(f"Some files still locked, will be cleaned up later: {still_locked}")
@@ -453,14 +484,13 @@ class ArchiveService:
                 # Delete files if folder exists
                 if source_folder.exists():
                     gc.collect()  # Release any Python file handles
-                    try:
-                        shutil.rmtree(source_folder)
+                    if _rmtree_with_retry(source_folder):
                         logger.info(f"Deleted folder: {source_folder}")
-                    except PermissionError as e:
-                        logger.warning(f"Permission denied deleting folder {source_folder}: {e}")
-                        # Continue to delete from database anyway
-                    except OSError as e:
-                        logger.warning(f"Could not delete folder {source_folder}: {e}")
+                    else:
+                        # Continue to delete from database anyway (original behaviour), but say
+                        # exactly what was left so it can be cleaned up by hand.
+                        left = [p.name for p in source_folder.iterdir()] if source_folder.exists() else []
+                        logger.warning(f"Could not fully delete folder {source_folder}; left: {left}")
 
             # Remove from database
             self._db.delete_animation(uuid)
