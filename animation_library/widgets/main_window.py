@@ -1266,6 +1266,14 @@ class MainWindow(QMainWindow):
         name = animation.get('name', 'Unknown')
         version_group_id = animation.get('version_group_id', uuid)
 
+        # Right-click on a card that is part of a multi-selection acts on the whole
+        # selection (the menu used to act only on the clicked card). Right-click
+        # outside the selection keeps the single-card behaviour.
+        selected = self._animation_view.get_selected_uuids()
+        targets = selected if (uuid in selected and len(selected) > 1) else [uuid]
+        n = len(targets)
+        suffix = f" ({n})" if n > 1 else ""
+
         # Create context menu
         menu = QMenu(self)
 
@@ -1288,27 +1296,33 @@ class MainWindow(QMainWindow):
         # Toggle Favorite
         is_favorite = animation.get('is_favorite', 0)
         fav_text = "Remove from Favorites" if is_favorite else "Add to Favorites"
-        fav_action = menu.addAction(fav_text)
-        fav_action.triggered.connect(lambda: self._toggle_favorite(uuid))
+        fav_action = menu.addAction(fav_text + suffix)
+        # Clicked card decides the direction so a mixed selection ends up uniform.
+        fav_action.triggered.connect(lambda: self._set_favorite(targets, not is_favorite))
 
         # Add tags
-        tag_action = menu.addAction("Add Tags...")
-        tag_action.triggered.connect(lambda: self._add_tags_to_animations([uuid]))
+        tag_action = menu.addAction(f"Add Tags{suffix}...")
+        tag_action.triggered.connect(lambda: self._add_tags_to_animations(targets))
 
         # Remove from the folder we're currently looking at. Only offered when a
         # real folder is selected, because "remove from folder" is meaningless in
         # Home or a virtual folder - and it says WHICH folder, since an animation
         # is usually in several.
         current_folder_id = self._filter_ctrl.get_current_folder_id()
-        if current_folder_id and current_folder_id in set(
-            self._db_service.get_folders_for_animation(uuid)
-        ):
+        in_folder = [
+            u for u in targets
+            if current_folder_id and current_folder_id in set(
+                self._db_service.get_folders_for_animation(u)
+            )
+        ] if current_folder_id else []
+        if in_folder:
             folder = self._db_service.get_folder_by_id(current_folder_id)
             folder_name = folder.get('name') if folder else None
             if folder_name:
-                remove_action = menu.addAction(f"Remove from '{folder_name}'")
+                rm_suffix = f" ({len(in_folder)})" if len(in_folder) > 1 else ""
+                remove_action = menu.addAction(f"Remove from '{folder_name}'{rm_suffix}")
                 remove_action.triggered.connect(
-                    lambda: self._remove_from_folder([uuid], current_folder_id)
+                    lambda: self._remove_from_folder(in_folder, current_folder_id)
                 )
 
         menu.addSeparator()
@@ -1316,11 +1330,17 @@ class MainWindow(QMainWindow):
         # Delete/Archive action based on mode
         from ..config import Config
         if Config.is_solo_mode():
-            delete_action = menu.addAction("Delete")
-            delete_action.triggered.connect(lambda: self._instant_delete_animation(uuid))
+            delete_action = menu.addAction("Delete" + suffix)
+            if n > 1:
+                # Uses the current selection, which equals `targets` here.
+                delete_action.triggered.connect(self._instant_delete_selected)
+            else:
+                delete_action.triggered.connect(lambda: self._instant_delete_animation(uuid))
         else:
-            archive_action = menu.addAction("Move to Archive")
-            archive_action.triggered.connect(lambda: self._archive_animation(uuid))
+            archive_action = menu.addAction("Move to Archive" + suffix)
+            archive_action.triggered.connect(
+                lambda: self._archive_trash_ctrl.archive_animations(targets)
+            )
 
         # Show menu at cursor position
         menu.exec(position)
@@ -1363,6 +1383,13 @@ class MainWindow(QMainWindow):
             f"Added {', '.join(new_tags)} to {updated} animation(s)"
             if updated else "No tags added (already present)"
         )
+
+    def _set_favorite(self, uuids: List[str], is_favorite: bool):
+        """Set favorite on several animations at once (context menu on a selection)."""
+        for u in uuids:
+            if self._db_service.set_favorite(u, is_favorite):
+                self._animation_model.refresh_animation(u)
+        self._animation_view.viewport().update()
 
     def _remove_from_folder(self, uuids: List[str], folder_id: int):
         """Take animations out of one folder, leaving them in any others."""
