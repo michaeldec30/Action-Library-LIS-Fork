@@ -1,5 +1,14 @@
 > **Action Library LIS Fork** — a fork of [Action Library](https://github.com/CGstuff/Action-Library) by CGstuff (based on 1.6.2), with fixes and workflow additions. See [FORK_CHANGES.md](FORK_CHANGES.md). GPL v3, like the original.
 
+## AI assistance disclosure
+
+The changes in this fork (see [FORK_CHANGES.md](FORK_CHANGES.md)) were written with the help of
+Claude (Anthropic), an AI assistant, working on the maintainer's instructions.
+Every change was reviewed and tested by the maintainer in a real library before
+being committed. AI-assisted commits are marked with a
+`Co-Authored-By: Claude` trailer. The original Action Library code by CGstuff
+is unchanged except where noted.
+
 <p align="center">
   <img src="assets/Icon.png" alt="Action Library" width="128" height="128">
 </p>

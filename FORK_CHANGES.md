@@ -3,6 +3,7 @@
 Fork of [Action Library](https://github.com/CGstuff/Action-Library) by CGstuff,
 based on release **1.6.2**. Licensed under the GNU GPL v3, same as the original
 (see `LICENSE`). Every modified file carries a notice in its first line.
+Changes made with AI assistance (Claude, Anthropic), reviewed and tested by the maintainer — see README.
 
 | Change | Files |
 |---|---|
