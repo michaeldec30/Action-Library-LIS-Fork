@@ -378,7 +378,7 @@ class MetadataPanel(QWidget):
         self._status_badge = QPushButton("WIP")
         self._status_badge.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self._status_badge.clicked.connect(self._on_status_badge_clicked)
-        self._update_status_badge_style('wip')
+        self._update_status_badge_style('none')
         status_layout.addWidget(self._status_badge)
 
         status_layout.addStretch()
@@ -1199,7 +1199,7 @@ class MetadataPanel(QWidget):
 
         menu = QMenu(self)
 
-        current_status = self._animation.get('status', 'wip')
+        current_status = self._animation.get('status', 'none')
 
         n = len(self._status_targets(self._animation.get('uuid')))
         if n > 1:

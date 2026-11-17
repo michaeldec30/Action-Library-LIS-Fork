@@ -16,6 +16,7 @@ Changes made with AI assistance (Claude, Anthropic), reviewed and tested by the 
 | Grid scrolls to the top when switching folders | `widgets/main_window.py` |
 | Settings → Appearance → **Mouse Wheel Scroll** (px per notch) | `views/animation_view.py`, `widgets/settings/theme_tab.py` |
 | Settings → Appearance → **Show status bar** (errors go to a dialog when hidden) | `widgets/main_window.py`, `widgets/settings/theme_tab.py` |
+| New animations get status **None** instead of WIP (DB insert default; badge fallback) | `services/database/animations.py`, `widgets/metadata_panel.py` |
 
 Paths are relative to `animation_library/`. Settings keys (QSettings) and the
 user data folder are unchanged, so the fork reads an existing installation's

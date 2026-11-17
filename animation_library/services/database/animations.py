@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 Animation Repository - Database operations for animations
 
@@ -128,7 +129,7 @@ class AnimationRepository:
                     animation_data.get('version_group_id', uuid),  # Default to own UUID
                     animation_data.get('is_latest', 1),
                     # Lifecycle status (v6)
-                    animation_data.get('status', 'wip'),
+                    animation_data.get('status', 'none'),  # LIS fork: new animations start with no status
                     # Pose flag (v7) - 0 for actions, 1 for poses
                     animation_data.get('is_pose', 0),
                     # Partial pose flag (v8) - 1 if captured with selected bones only
