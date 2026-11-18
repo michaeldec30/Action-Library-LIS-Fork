@@ -9,177 +9,134 @@ being committed. AI-assisted commits are marked with a
 `Co-Authored-By: Claude` trailer. The original Action Library code by CGstuff
 is unchanged except where noted.
 
-<p align="center">
-  <img src="assets/Icon.png" alt="Action Library" width="128" height="128">
-</p>
-
-<h1 align="center">Action Library</h1>
+<div align="center">
+  <a href="https://github.com/CGstuff/Action-Library/blob/main/README.md"><h1>Original README by CGStuff and installation guide</a>
+</div>
 
 <p align="center">
-  <strong>A production-grade animation & pose library manager for Blender</strong>
+  <img src="assets/logo_lis_round.png" alt="LIS Logo" width="128" height="128">
 </p>
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+"></a>
-  <a href="https://pypi.org/project/PyQt6/"><img src="https://img.shields.io/badge/PyQt-6.5+-green.svg" alt="PyQt6"></a>
-  <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-4.5--5.0+-orange.svg" alt="Blender 4.5-5.0+"></a>
-</p>
+<div align="center">
+  <h1>LIS Fork</h1>
+</div>
 
-<p align="center">
-  <img src="media/Hero.gif" alt="Action Library — browse, organize, and apply animations" width="100%">
-</p>
+
+This fork builds on the original Action Library with a number of improvements focused on managing large animation collections, streamlining everyday navigation through thousands of separate actions, and making the interface more flexible.
 
 ---
 
-Built after completing a 55-minute 3D animated feature film as a solo technical director. During production, I kept hitting the same limitations in Blender — managing animation data at scale, reusing clips across scenes, tracking iterations, and reviewing work. Action Library is the tool I wish I'd had from day one.
+## Library & Folder Navigation
 
-Open-sourced so others working on serious Blender projects can build on the same foundation.
+Managing large libraries is easier with improved folder navigation and organization.
 
----
+- **Unfiled animations on Home:** The Home view now displays only animations that haven't been assigned to a folder. It is also selected automatically on startup. Home is now meant to be a temporary place before being assigned to a folder.
+- **Improved folder selection:** Fixed an issue where selecting a nested folder could jump to another folder with the same name elsewhere in the tree.
+- **Move to Folder:** move animations directly between folders using a folder picker with full paths and filtering.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_move.png" alt="Move to folder" width="300" style>
+</p>
 
-## Apply Animations Instantly
-
-Double-click any animation card to apply it to your rig in Blender — no file menus, no importing. The desktop app talks to Blender over a real-time socket connection, so it's immediate.
-
-- **Ctrl + Double-click** to apply mirrored
-- **Shift + Double-click** to apply as action slot
-- **Alt + Double-click** to insert at playhead
-
-<p align="center">
-  <img src="media/Apply.gif" alt="Apply animations to Blender with a double-click" width="100%">
+- **Keyboard folder navigation:** Browse folders using keyboard shortcuts, including when the folder tree is hidden.
+- **Quick folder access:** The current folder is displayed in the header, and clicking it opens the folder picker.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_currentFolder.png" alt="Current Folder" width="240" style>
 </p>
 
 ---
 
-## Pose Blending
+## Bulk Editing & Context Menus
 
-Right-click and drag on any pose to blend between your current pose and the library pose in real-time. Hold **Ctrl** while dragging to mirror. Release to apply, **Escape** to cancel.
+Several actions now support multi-selection, making it easier to manage large numbers of animations at once.
 
-<p align="center">
-  <img src="media/blending.gif" alt="Real-time pose blending" width="100%">
+- **Bulk context menu actions:** Archive, delete, remove from folder, manage tags, and toggle favorites for multiple selected animations.
+- **Bulk status changes:** Change the status of all selected animations at once.
+- **Improved folder management:** Moving animations to another folder also removes them from their previous folder.
+
+---
+
+## Keyboard Shortcuts
+
+A dedicated shortcut configuration page provides extensive control over keyboard navigation and common actions.
+
+- **Configurable shortcuts:** Assign shortcuts to actions such as archive, delete, folder management, tags, favorites, renaming, status changes, previews, sorting, and more.
+- **Alternative bindings:** Every supported action can have a primary and an alternative shortcut.
+- **Mouse wheel bindings:** Use the mouse wheel for supported actions, including changing card size with Ctrl + Wheel by default.
+- **Layout-independent keys:** Character shortcuts work according to their physical QWERTY key positions, regardless of the active keyboard layout.
+- **Shortcut help overlay:** Quickly view the current keyboard bindings directly in the application.
+
+<p style="margin-left: 40px;">
+  <img src="assets/readme_shortcuts.png" alt="readme_shortcuts" width="200" >
 </p>
 
 ---
 
-## Capture from Blender
+## Animation Previews
 
-Capture actions and poses directly from the Blender sidebar. Supports selective frame ranges, selected bones only, and auto-detection of rig types (Rigify, Mixamo, Auto-Rig Pro, Epic Skeleton, custom).
+Preview playback has been expanded with additional playback controls and display improvements.
 
-<p align="center">
-  <img src="media/capture.gif" alt="Capture animations from Blender" width="100%">
+- **Playback presets (FS1–FS4):** Choose between four frame-skip presets to adjust preview playback speed and smoothness.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_fsIcon.png" alt="FS Icon" width="200" >
+</p>
+
+- **Custom playback settings:** Configure each preset in Appearance settings. FS1 preserves the original playback pace.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_fsPresets.png" alt="FS Presets" width="300" >
+</p>
+
+- **Immediate playback:** Enabling previews starts playback immediately instead of waiting for the first scroll.
+- **Playback state indicator:** The Previews button now displays a play or pause icon to indicate its current state.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_playIcon.png" alt="Play Icon" width="300" >
+</p>
+
+- **Resizable video preview:** The video preview now follows the size of the information panel instead of remaining locked to its initial dimensions.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_previewInfo.png" alt="readme_shortcuts" width="400" >
 </p>
 
 ---
 
-## Version Comparison & Review
+## Interface & Customization
 
-Track iterations with the lineage system (v001 → v002 → v003). Compare any two versions side by side with synchronized playback. Add timestamped review notes and draw annotations directly on frames.
+The interface has received several usability improvements and additional customization options.
 
-<p align="center">
-  <img src="media/compare.gif" alt="Side-by-side version comparison" width="100%">
+- **Resizable panels:** Show or hide the folder tree and information panel using header buttons or the B / I shortcuts. Panel visibility and widths are preserved between sessions.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_panelBefore.png" alt="Panel Before" width="500" >
+</p>
+<p style="margin-left: 40px;">
+  <img src="assets/readme_panelAfter.png" alt="Panel After" width="500" >
 </p>
 
----
-
-## Drawover Annotations
-
-Draw directly on video frames during review — pen, line, arrow, shapes. Annotations are saved per-frame, support ghosting across adjacent frames, and can be exported as MP4 for sharing feedback.
-
-<p align="center">
-  <img src="media/anotate.gif" alt="Drawover annotations for review" width="100%">
+- **Responsive header:** The header adapts to available space, prioritizing the library and current folder information.
+- **Larger animation cards:** Maximum card size increased from 300 to 475 pixels, with thumbnails loaded at the larger size to remain sharp.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_previewSize.png" alt="Preview Size" width="400" >
 </p>
 
----
-
-## Themes
-
-Four built-in themes plus a full custom theme editor with 40+ color options and live preview.
-
-<p align="center">
-  <img src="media/themes.gif" alt="Theme options" width="100%">
+- **Mouse wheel scrolling:** Configure the amount of scrolling performed with each mouse wheel notch.
+<p style="margin-left: 40px;">
+  <img src="assets/readme_scrollSetting.png" alt="Scroll Setting" width="300" >
 </p>
 
----
-
-## Features
-
-| Category | Details |
-|----------|---------|
-| **Library** | Actions & poses, folders, tags, favorites, search, filtering, grid/list views |
-| **Apply** | Real-time socket bridge to Blender, mirror, reverse, selected bones, action slots |
-| **Pose Blending** | Right-click drag blending with mirror support |
-| **Versioning** | Lineage system with cold storage, immutable version numbers |
-| **Review** | Version comparison, timestamped notes, drawover annotations, MP4 export |
-| **Capture** | Full action, frame range, selected bones, auto rig detection |
-| **Pipeline** | Studio naming templates, lifecycle status (WIP → Review → Approved), multi-user storage |
-| **UI** | 4 themes + custom editor, keyboard shortcuts (J/K/L playback), resizable panels |
-| **Performance** | Handles 1000+ animations, async thumbnail loading, SQLite + WAL, virtual scrolling |
+- **Status bar visibility:** Show or hide the status bar. Errors are displayed in a dialog when the status bar is hidden.
+- **Improved settings window:** Settings pages scroll when necessary, and the window adapts to the available screen space.
+- **Improved settings controls:** Numeric input fields have been widened for better readability.
+- **Default animation status:** Newly added animations now start with no status assigned instead of WIP.
 
 ---
 
-## Installation
+## Windows Compatibility & Maintenance
 
-### Option 1: Download Release (Recommended)
+A few additional fixes improve reliability and compatibility, particularly on Windows.
 
-Download the latest portable release from the [Releases](../../releases) page. Unzip and run — no installation required.
-
-> **Note:** Windows may show an "Unknown publisher" warning on first run. Click **More info** → **Run anyway**. This is normal for unsigned open source software.
-
-### Option 2: Run from Source
-
-```bash
-git clone https://github.com/CGstuff/action-library.git
-cd action-library
-python -m venv venv
-venv\Scripts\activate        # Windows
-source venv/bin/activate     # macOS/Linux
-pip install -r requirements.txt
-python run.py
-```
+- **Preview file handling:** Fixed an issue where open preview videos could prevent animations from being deleted or archived, leaving behind orphaned video files.
+- **Independent taskbar entry:** When launched from source on Windows, the application now uses its own taskbar entry and icon instead of Python's.
+- **Version identification:** The fork uses its own version identifier (`1.6.2-lis`) and checks for updates against its own releases rather than the upstream repository.
+- **Existing installation compatibility:** Existing settings and user data locations remain unchanged, allowing the fork to use an existing Action Library setup.
 
 ---
 
-## Quick Start
-
-1. **Launch** Action Library
-2. **Settings → Blender Integration** — browse to your `blender.exe` and click **Verify**
-3. **Install Addon** — click the button, then restart Blender
-4. **Enable** the addon in Blender: Edit → Preferences → Add-ons → search "Action Library"
-5. **Set the library path** in addon preferences to match the desktop app's storage location
-6. **Capture** — select an armature in Blender, open the N-panel → Animation Library tab, click **Capture Action**
-7. **Apply** — double-click any card in the desktop app to load it into Blender
-
-For the full walkthrough, see [Getting Started](GETTING_STARTED.md).
-
----
-
-## Documentation
-
-| Guide | Description |
-|-------|-------------|
-| [Getting Started](GETTING_STARTED.md) | First-time setup, addon installation, first capture |
-| [Studio Guide](STUDIO_GUIDE.md) | Multi-user deployment, shared storage, pipeline integration |
-| [Architecture](ARCHITECTURE.md) | System design, patterns, and performance |
-| [Developer Guide](DEVELOPER_GUIDE.md) | Development setup and contribution guidelines |
-| [Changelog](CHANGELOG.md) | Version history |
-
----
-
-## Architecture
-
-Built with **PyQt6** and a Model/View architecture. Key design choices:
-
-- **Event Bus** — decoupled component communication
-- **Thread Pool** — async thumbnail loading, background operations
-- **SQLite + WAL** — concurrent database access with write-ahead logging
-- **Socket Bridge** — real-time TCP connection to Blender (fallback to file-based queue)
-- **Virtual Scrolling** — renders only visible items, tested with 4000+ animations
-
----
-
-## License
-
-GNU General Public License v3.0 — see [LICENSE](LICENSE).
-
-> Earlier versions (≤ 1.4) were published under GPL while using PyQt (GPL/commercial). As of v1.4.1, the license is explicitly GPL-3.0 for full compatibility. No retroactive relicensing implied.
+For a detailed technical list of changes and affected files, see [FORK_CHANGES.md](FORK_CHANGES.md).
