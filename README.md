@@ -10,9 +10,9 @@ being committed. AI-assisted commits are marked with a
 is unchanged except where noted.
 
 <div align="center">
-  <a href="https://github.com/CGstuff/Action-Library/blob/main/README.md">
-    <h1>Original README by CGStuff and installation guide</h1>
-  </a>
+
+# [Original README by CGstuff and installation guide](https://github.com/CGstuff/Action-Library/blob/main/README.md)
+
 </div>
 
 <p align="center">
