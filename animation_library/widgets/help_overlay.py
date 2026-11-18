@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 Help Overlay - Keyboard shortcuts legend
 
@@ -5,7 +6,7 @@ Shows a semi-transparent overlay with all keyboard shortcuts.
 Toggle with 'H' key.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QColor, QFont, QKeyEvent
 
@@ -42,8 +43,6 @@ class HelpOverlay(QWidget):
             ("Shift + Click", "Range select"),
         ]),
         ("General", [
-            ("H", "Toggle this help"),
-            ("F1", "Open the documentation"),
             ("Escape", "Close dialogs / Cancel"),
         ]),
     ]
@@ -53,6 +52,9 @@ class HelpOverlay(QWidget):
 
         self._theme_manager = get_theme_manager()
         self._visible = False
+        # Callable -> [(key label, description)] for the configurable shortcuts
+        # (Settings > Shortcuts); refreshed every time the overlay opens.
+        self._shortcuts_provider = None
 
         # Style as overlay - no special window flags needed for child widget
         self.setAutoFillBackground(True)
@@ -80,12 +82,30 @@ class HelpOverlay(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         container_layout.addWidget(title)
 
+        # Two columns: built-in mouse/navigation help left, configurable shortcuts right
+        columns = QHBoxLayout()
+        columns.setSpacing(30)
+        left = QVBoxLayout()
+        right = QVBoxLayout()
+        columns.addLayout(left)
+        columns.addLayout(right)
+        container_layout.addLayout(columns)
+
+        right_header = QLabel("Library Shortcuts (Settings > Shortcuts)")
+        right_header.setObjectName("helpCategory")
+        right.addWidget(right_header)
+        self._dynamic_label = QLabel("")
+        self._dynamic_label.setObjectName("helpShortcut")
+        self._dynamic_label.setContentsMargins(10, 2, 0, 2)
+        right.addWidget(self._dynamic_label)
+        right.addStretch()
+
         # Shortcuts by category
         for category_name, shortcuts in self.SHORTCUTS:
             # Category header
             category_label = QLabel(category_name)
             category_label.setObjectName("helpCategory")
-            container_layout.addWidget(category_label)
+            left.addWidget(category_label)
 
             # Shortcuts in this category
             for key, description in shortcuts:
@@ -99,10 +119,11 @@ class HelpOverlay(QWidget):
                 shortcut_text.setObjectName("helpShortcut")
                 row_layout.addWidget(shortcut_text)
 
-                container_layout.addWidget(row)
+                left.addWidget(row)
+        left.addStretch()
 
         # Footer hint
-        footer = QLabel("Press H to close")
+        footer = QLabel("Press the help shortcut or Escape to close")
         footer.setObjectName("helpFooter")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         container_layout.addWidget(footer)
@@ -127,7 +148,7 @@ class HelpOverlay(QWidget):
                 border: 1px solid {palette.border};
                 border-radius: 12px;
                 min-width: 400px;
-                max-width: 500px;
+                max-width: 950px;
             }}
 
             #helpTitle {{
@@ -163,8 +184,18 @@ class HelpOverlay(QWidget):
             }}
         """)
 
+    def set_shortcuts_provider(self, provider):
+        self._shortcuts_provider = provider
+
+    def _refresh_dynamic(self):
+        rows = self._shortcuts_provider() if self._shortcuts_provider else []
+        self._dynamic_label.setText("<br>".join(
+            f"<b>{key}</b>  —  {desc}" for key, desc in rows) or "(none assigned)")
+
     def toggle(self):
         """Toggle visibility"""
+        if not self._visible:
+            self._refresh_dynamic()
         if self._visible:
             self.hide()
             self._visible = False

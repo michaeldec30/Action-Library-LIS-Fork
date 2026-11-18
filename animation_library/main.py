@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 Animation Library v2 - Main Entry Point
 
@@ -126,6 +127,16 @@ def setup_application() -> QApplication:
     Returns:
         Configured QApplication instance
     """
+    # LIS fork: when run from source the process is python.exe, and Windows groups the
+    # window under Python's taskbar entry and icon. An explicit AppUserModelID makes it
+    # its own taskbar entry, which then shows the window icon (AL.ico) set below.
+    if sys.platform == "win32" and not getattr(sys, 'frozen', False):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("CGstuff.ActionLibrary.LISFork")
+        except Exception:
+            pass  # cosmetic only
+
     # Create application
     app = QApplication(sys.argv)
 

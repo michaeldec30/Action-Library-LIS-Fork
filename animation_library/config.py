@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 Global configuration for Animation Library v2
 
@@ -26,7 +27,9 @@ class Config:
         # doesn't remove a BOM, and every version comparison downstream breaks.
         APP_VERSION: Final[str] = _version_file.read_text(encoding='utf-8-sig').strip()
     else:
-        APP_VERSION: Final[str] = "1.4.1"  # Fallback/Dev version
+        # LIS fork: was "1.4.1" (stale upstream fallback). Running from source has no
+        # version.txt, so this is what the title bar and the update check see.
+        APP_VERSION: Final[str] = "1.6.2-lis"
 
     APP_AUTHOR: Final[str] = "CGstuff"
 
@@ -53,7 +56,9 @@ class Config:
     # UI settings
     DEFAULT_CARD_SIZE: Final[int] = 160  # Grid mode card size
     MIN_CARD_SIZE: Final[int] = 80
-    MAX_CARD_SIZE: Final[int] = 300
+    # LIS fork: 475 (was 300) - two full rows on a 1080p screen with the side panels
+    # hidden. Off the 20 px step grid: the slider / Num+ just clamp to it.
+    MAX_CARD_SIZE: Final[int] = 475
     CARD_SIZE_STEP: Final[int] = 20
 
     DEFAULT_VIEW_MODE: Final[str] = "grid"  # "grid" or "list"

@@ -177,6 +177,14 @@ class AnimationView(QListView):
         if new_selection_model:
             new_selection_model.selectionChanged.connect(self._on_selection_changed)
 
+        # LIS fork: re-report visible cards whenever the shown rows change. At startup
+        # previews were switched on before the library had loaded - no cards were
+        # visible, so nothing played until you scrolled.
+        if model is not None:
+            for signal in (model.modelReset, model.layoutChanged, model.rowsInserted,
+                           model.rowsRemoved):
+                signal.connect(lambda *_: self.refresh_animated_previews())
+
     def set_view_mode(self, mode: str):
         """
         Set view mode

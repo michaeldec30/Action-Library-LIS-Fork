@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 BulkEditController - Handles bulk edit operations on animations
 
@@ -93,14 +94,16 @@ class BulkEditController:
 
         # Show tag selection dialog
         tag_list = sorted(list(all_tags))
-        tag, ok = QInputDialog.getItem(
-            self._parent,
-            "Remove Tag",
-            "Select tag to remove:",
-            tag_list,
-            0,
-            False
-        )
+        # LIS fork: same picker as QInputDialog.getItem, but closes on a click outside.
+        from ...utils.popup_dialog import make_dismissable
+        dialog = QInputDialog(self._parent)
+        dialog.setWindowTitle("Remove Tag")
+        dialog.setLabelText("Remove Tag - select tag to remove:")
+        dialog.setComboBoxItems(tag_list)
+        dialog.setComboBoxEditable(False)
+        make_dismissable(dialog)
+        ok = dialog.exec() == QInputDialog.DialogCode.Accepted
+        tag = dialog.textValue()
 
         if not ok or not tag:
             return

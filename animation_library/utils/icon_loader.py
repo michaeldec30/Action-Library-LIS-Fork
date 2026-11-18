@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 Icon Loader - Centralized icon path resolution with theme-aware colorization
 
@@ -37,6 +38,8 @@ class IconLoader:
         "al_icon": "AL.svg",
         "settings": "settings.svg",
         "view_mode": "view_mode.svg",
+        "panel_left": "panel_left.svg",    # LIS fork: folder tree toggle
+        "panel_right": "panel_right.svg",  # LIS fork: info panel toggle
         "console": "console.svg",
         "resize_grid": "resize_grid.svg",
         "folder_closed": "folder_closed.svg",

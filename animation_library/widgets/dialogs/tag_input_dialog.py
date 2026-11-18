@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 TagInputDialog - Dialog for adding tags to animations
 """
@@ -20,6 +21,11 @@ class TagInputDialog(QDialog):
         self.resize(400, 150)
 
         self._create_ui()
+
+        # LIS fork: closes on a click outside (= Cancel), opens at the cursor.
+        from ...utils.popup_dialog import make_dismissable
+        make_dismissable(self)
+        self._tag_input.setFocus()
 
     def _create_ui(self):
         """Create dialog UI"""

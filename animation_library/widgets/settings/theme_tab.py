@@ -101,7 +101,8 @@ class ThemeTab(QWidget):
         self.folder_size_spinbox.setMinimum(8)
         self.folder_size_spinbox.setMaximum(20)
         self.folder_size_spinbox.setSuffix(" pt")
-        self.folder_size_spinbox.setFixedWidth(80)
+        # LIS fork: 120 (was 80) - the up/down buttons took the whole box, the value was hidden
+        self.folder_size_spinbox.setFixedWidth(120)
         self.folder_size_spinbox.setValue(self.theme_manager.get_folder_text_size())
         self.folder_size_spinbox.valueChanged.connect(self._on_folder_size_changed)
         folder_size_row.addWidget(self.folder_size_spinbox)
@@ -117,7 +118,7 @@ class ThemeTab(QWidget):
         self.wheel_step_spinbox.setSingleStep(10)
         self.wheel_step_spinbox.setSuffix(" px")
         self.wheel_step_spinbox.setSpecialValueText("Qt default")
-        self.wheel_step_spinbox.setFixedWidth(100)
+        self.wheel_step_spinbox.setFixedWidth(140)  # room for "2000 px" next to the buttons
         self.wheel_step_spinbox.setToolTip(
             "How far the card grid scrolls per mouse wheel notch.\n"
             "Smaller = slower. 0 = Qt default (about three card rows)."
@@ -127,6 +128,41 @@ class ThemeTab(QWidget):
         wheel_row.addWidget(self.wheel_step_spinbox)
         wheel_row.addStretch()
         ui_layout.addLayout(wheel_row)
+
+        # Frame Skip presets FS1-FS4 (LIS fork). Picked in the header, left of the
+        # Previews button; each shows every N-th preview frame at a fixed rate.
+        from ...services.sprite_playback import get_sprite_playback
+        fs_note = QLabel("Frame Skip presets (picked in the header next to Previews). "
+                         "Each clip keeps at most 24 preview frames.")
+        fs_note.setWordWrap(True)
+        ui_layout.addWidget(fs_note)
+        self.fs_spinboxes = []
+        for i, (step, fps) in enumerate(get_sprite_playback().get_fs_presets(), start=1):
+            row = QHBoxLayout()
+            row.addWidget(QLabel(f"FS{i}: every"))
+            step_box = QSpinBox()
+            step_box.setRange(1, 8)
+            step_box.setValue(step)
+            step_box.setSuffix(" frame")
+            step_box.setFixedWidth(130)
+            step_box.setToolTip("Show every N-th preview frame (1 = all of them).")
+            row.addWidget(step_box)
+            row.addWidget(QLabel("at"))
+            fps_box = QSpinBox()
+            fps_box.setRange(1, 60)
+            fps_box.setValue(fps)
+            fps_box.setSuffix(" fps")
+            fps_box.setFixedWidth(120)
+            fps_box.setToolTip("Preview frames shown per second (original pace: 15).")
+            row.addWidget(fps_box)
+            row.addStretch()
+            ui_layout.addLayout(row)
+
+            def _apply(_=None, i=i, sb=step_box, fb=fps_box):
+                get_sprite_playback().set_fs_preset(i, sb.value(), fb.value())
+            step_box.valueChanged.connect(_apply)
+            fps_box.valueChanged.connect(_apply)
+            self.fs_spinboxes.append((step_box, fps_box))
 
         # Hide shortcut toggles (power user mode)
         self.hide_toggles_check = QCheckBox("Hide Mirror/Slots toggles (use keyboard shortcuts)")

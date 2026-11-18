@@ -273,6 +273,7 @@ class MainWindow(QMainWindow):
         # Help overlay (hidden by default, toggle with 'H')
         # Created after layout so it overlays correctly
         self._help_overlay = HelpOverlay(central_widget)
+        self._help_overlay.set_shortcuts_provider(self._shortcut_help_rows)
 
     def _init_controllers(self):
         """Initialize controllers for delegated functionality"""
@@ -393,6 +394,27 @@ class MainWindow(QMainWindow):
         # Header toolbar archive -> archive selected animations (soft delete)
         self._track_connection(self._header_toolbar.delete_clicked, self._on_archive_clicked)
 
+        # Panel toggles (header buttons / B and I shortcuts). Hidden panels keep their
+        # width: QSplitter restores it on show. The state survives restarts.
+        self._track_connection(self._header_toolbar.folder_picker_requested, self._jump_to_folder)
+        self._track_connection(self._header_toolbar.folders_panel_toggled,
+                               lambda v: self._set_panel_visible(0, "view/show_folder_tree", v))
+        self._track_connection(self._header_toolbar.info_panel_toggled,
+                               lambda v: self._set_panel_visible(2, "view/show_info_panel", v))
+        self._panel_widths = {}  # splitter index -> last visible width
+        _s = QSettings(Config.APP_AUTHOR, Config.APP_NAME)
+        self._header_toolbar.set_panel_buttons(
+            _s.value("view/show_folder_tree", True, type=bool),
+            _s.value("view/show_info_panel", True, type=bool),
+        )
+
+        # Keyboard shortcuts (Settings > Shortcuts). An application-level filter so they
+        # win over the grid's own key handling (type-ahead search, Delete, digits).
+        from ..services import shortcuts as shortcut_service
+        self._shortcut_bindings = shortcut_service.load_bindings()
+        if app is not None:
+            app.installEventFilter(self)
+
         # Apply panel -> apply animation with options
         self._track_connection(self._apply_panel.apply_clicked, self._on_apply_with_options)
 
@@ -465,18 +487,17 @@ class MainWindow(QMainWindow):
                 try:
                     sizes = [int(s) for s in sizes]
                     self._splitter.setSizes(sizes)
+                    # Widths to restore hidden panels to (LIS fork panel toggles)
+                    for i in (0, 2):
+                        if i < len(sizes) and sizes[i] > 0:
+                            self._panel_widths[i] = sizes[i]
                 except (ValueError, TypeError):
                     # If conversion fails, use defaults
                     self._splitter.setSizes(Config.DEFAULT_SPLITTER_SIZES)
 
-        # Animated previews. On by default; anyone who has explicitly turned
-        # them off keeps that, since their setting is already stored.
-        from ..services.sprite_playback import DEFAULT_ANIMATED_PREVIEWS
-        animated = settings.value(
-            "view/animated_previews", DEFAULT_ANIMATED_PREVIEWS, type=bool)
-        self._header_toolbar.set_animated_previews(animated)
-        if animated:
-            self._on_animated_previews_toggled(True)
+        # Animated previews. LIS fork: always start paused (user's choice) - the
+        # Previews button / P turns them on for the session.
+        self._header_toolbar.set_animated_previews(False)
 
         # Look for a newer release. Runs off the UI thread a couple of seconds
         # in, and shows nothing at all unless there's genuinely an update.
@@ -501,7 +522,13 @@ class MainWindow(QMainWindow):
         settings.setValue("window/state", self.saveState())
 
         # Splitter sizes
-        settings.setValue("splitter/sizes", self._splitter.sizes())
+        # A hidden panel reports width 0 - save its last real width instead, or it
+        # would come back collapsed.
+        sizes = list(self._splitter.sizes())
+        for i in (0, 2):
+            if i < len(sizes) and sizes[i] == 0:
+                sizes[i] = self._panel_widths.get(i, Config.DEFAULT_SPLITTER_SIZES[i])
+        settings.setValue("splitter/sizes", sizes)
 
         # Card size
         settings.setValue("view/card_size", self._header_toolbar.get_card_size())
@@ -1088,6 +1115,13 @@ class MainWindow(QMainWindow):
         """
         is_virtual = folder_id is None or folder_id < 0
 
+        # "Current Folder" in the header: full path for user folders, name for built-ins.
+        shown = folder_name
+        if not is_virtual:
+            folder = self._db_service.get_folder_by_id(folder_id) or {}
+            shown = folder.get('path') or folder_name
+        self._header_toolbar.set_current_folder(shown)
+
         # Start every newly opened folder at the top. Only on a real switch: if the
         # same folder is re-selected (tree refresh after a move/archive) the
         # scroll position stays where it was.
@@ -1410,9 +1444,14 @@ class MainWindow(QMainWindow):
             if updated else "No tags added (already present)"
         )
 
-    def _move_to_folder(self, uuids: List[str], source_folder_id):
-        """Pick a folder, add the animations to it, take them out of source_folder_id."""
+    def _move_to_folder(self, uuids: List[str], source_folder_id, title: str = "Move to Folder"):
+        """Pick a folder, add the animations to it, take them out of source_folder_id.
+
+        With source_folder_id=None it only adds (Add to Folder).
+        """
         from .dialogs.folder_picker_dialog import FolderPickerDialog
+        if not uuids:
+            return
 
         folders = [(f['id'], f.get('path') or f['name'])
                    for f in self._db_service.get_all_folders() if f.get('parent_id')]
@@ -1420,7 +1459,7 @@ class MainWindow(QMainWindow):
             folders = [f for f in folders if f[0] != source_folder_id]
         if not folders:
             return
-        dialog = FolderPickerDialog(folders, parent=self)
+        dialog = FolderPickerDialog(folders, title=title, parent=self)
         if dialog.exec() != dialog.DialogCode.Accepted:
             return
         target_id = dialog.selected_folder_id()
@@ -1781,7 +1820,10 @@ class MainWindow(QMainWindow):
 
     def _on_settings_changed(self, setting_name: str, value):
         """Handle settings changes from settings dialog"""
-        if setting_name == "show_status_bar":
+        if setting_name == "shortcuts":
+            from ..services import shortcuts as shortcut_service
+            self._shortcut_bindings = shortcut_service.load_bindings()
+        elif setting_name == "show_status_bar":
             self._status_bar.setVisible(bool(value))
         elif setting_name == "hide_shortcut_toggles":
             # Update apply panel toggles visibility
@@ -1841,23 +1883,203 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit
 
-        # F1 opens the documentation. No text-field guard: F1 isn't a character,
-        # so it can't collide with typing.
-        if event.key() == Qt.Key.Key_F1:
-            self._open_documentation()
-            event.accept()
-            return
-
-        # 'H' toggles help overlay
-        if event.key() == Qt.Key.Key_H:
-            # Don't trigger if typing in a text input field
-            focus = self.focusWidget()
-            if not isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit)):
-                self._help_overlay.toggle()
-                event.accept()
-                return
-
+        # Help (H) and documentation (F1) are configurable shortcuts now, handled
+        # in eventFilter() together with the rest.
         super().keyPressEvent(event)
+
+    # ==================== KEYBOARD SHORTCUTS ====================
+
+    def _shortcut_help_rows(self):
+        """[(key label, action label)] for the help overlay."""
+        from ..services import shortcuts as shortcut_service
+        rows = []
+        for a, pair in self._shortcut_bindings.items():
+            keys = " / ".join(shortcut_service.binding_label(b) for b in pair if b)
+            if keys:
+                rows.append((keys, shortcut_service.LABELS[a]))
+        return rows
+
+    def _action_for(self, binding):
+        if not binding:
+            return None
+        return next((a for a, pair in self._shortcut_bindings.items() if binding in pair), None)
+
+    def _wheel_shortcut(self, obj, event) -> bool:
+        """Wheel bindings (e.g. Ctrl+Wheel = card size). True if the event was used."""
+        app = QApplication.instance()
+        if (app.activeModalWidget() is not None or app.activePopupWidget() is not None
+                or not isinstance(obj, QWidget) or obj.window() is not self):
+            return False
+        if self._help_overlay.isVisible():
+            return False
+        from ..services import shortcuts as shortcut_service
+        binding = shortcut_service.binding_from_wheel(event)
+        action = self._action_for(binding)
+        if action is None:
+            return False
+        # One action per wheel notch; hi-res wheels / touchpads send smaller deltas.
+        self._wheel_accum = getattr(self, '_wheel_accum', 0) + event.angleDelta().y()
+        while abs(self._wheel_accum) >= 120:
+            self._wheel_accum -= 120 if self._wheel_accum > 0 else -120
+            self._run_shortcut(action)
+        return True
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if event.type() == QEvent.Type.Wheel:
+            if self._wheel_shortcut(obj, event):
+                return True
+            return super().eventFilter(obj, event)
+        if event.type() != QEvent.Type.KeyPress or event.isAutoRepeat():
+            return super().eventFilter(obj, event)
+        app = QApplication.instance()
+        # Only in this window, never over a dialog (settings, pickers, rename...) or an
+        # open popup menu: a QMenu.exec() is a nested event loop, so a second G would
+        # stack another gradient menu on top of the first one.
+        if (app.activeModalWidget() is not None or app.activePopupWidget() is not None
+                or app.activeWindow() is not self):
+            return super().eventFilter(obj, event)
+        from PyQt6.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox
+        focus = app.focusWidget()
+        if isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)):
+            return super().eventFilter(obj, event)
+        from ..services import shortcuts as shortcut_service
+        binding = shortcut_service.binding_from_event(event)
+        if not binding:
+            return super().eventFilter(obj, event)
+        # Right Alt (AltGr) arrives as Ctrl+Alt on Windows: if Ctrl+Alt+X is not bound,
+        # treat it as Alt+X, so both Alt keys work.
+        candidates = [binding]
+        if binding.startswith("Ctrl+Alt+"):
+            candidates.append("Alt+" + binding[len("Ctrl+Alt+"):])
+        action = next((a for c in candidates for a in [self._action_for(c)] if a), None)
+        if action is None:
+            return super().eventFilter(obj, event)
+        # While the help overlay is open only its own toggle works (Escape closes it).
+        if self._help_overlay.isVisible() and action != "help":
+            return super().eventFilter(obj, event)
+        # Escape also cancels a pose blend in the grid - leave that to the grid.
+        if action == "clear_selection" and getattr(self._animation_view, '_blend_active', False):
+            return super().eventFilter(obj, event)
+        self._run_shortcut(action)
+        return True
+
+    def _run_shortcut(self, action: str):
+        selected = self._animation_view.get_selected_uuids()
+        current_folder_id = self._filter_ctrl.get_current_folder_id()
+
+        if action == "help":
+            self._help_overlay.toggle()
+        elif action == "docs":
+            self._open_documentation()
+        elif action == "search":
+            box = self._header_toolbar._search_box
+            box.setFocus()
+            box.selectAll()
+        elif action == "clear_selection":
+            self._animation_view.clear_selection()
+        elif action in ("previews", "view_mode", "edit_mode", "reload", "toggle_folders", "toggle_info"):
+            # Same as clicking the header button (keeps its checked state in sync).
+            header = self._header_toolbar
+            {"previews": header._animated_btn, "view_mode": header._view_mode_btn,
+             "edit_mode": header._edit_mode_btn, "reload": header._refresh_btn,
+             "toggle_folders": header._folders_btn, "toggle_info": header._info_btn}[action].click()
+        elif action == "sort":
+            self._header_toolbar._sort_combo.showPopup()
+        elif action == "tags_filter":
+            self._header_toolbar._tags_combo.showPopup()
+        elif action == "folder_jump":
+            self._jump_to_folder()
+        elif action in ("folder_next", "folder_prev", "folder_up", "folder_down"):
+            self._folder_tree.navigate(action[len("folder_"):])
+        elif action in ("size_down", "size_up"):
+            slider = self._header_toolbar._size_slider
+            if slider.isEnabled():  # disabled in list view
+                step = Config.CARD_SIZE_STEP * (1 if action == "size_up" else -1)
+                slider.setValue(slider.value() + step)
+        elif not selected:
+            return  # everything below acts on the selection
+        elif action == "delete":
+            self._on_archive_clicked()
+        elif action == "move_to_folder":
+            self._move_to_folder(selected, current_folder_id)
+        elif action == "add_to_folder":
+            self._move_to_folder(selected, None, title="Add to Folder")
+        elif action == "remove_from_folder":
+            if current_folder_id:
+                in_folder = [u for u in selected
+                             if current_folder_id in set(self._db_service.get_folders_for_animation(u))]
+                if in_folder:
+                    self._remove_from_folder(in_folder, current_folder_id)
+        elif action == "add_tags":
+            self._on_add_tags()
+        elif action == "remove_tags":
+            self._on_remove_tags()
+        elif action == "gradient":
+            self._show_gradient_menu()
+        elif action == "favorite":
+            # All favorite -> unfavorite all; otherwise favorite all.
+            all_fav = all((self._animation_model.get_animation_by_uuid(u) or {}).get('is_favorite')
+                          for u in selected)
+            self._set_favorite(selected, not all_fav)
+        elif action == "rename":
+            shown = (self._metadata_panel._animation or {}).get('uuid')
+            if len(selected) == 1 and shown == selected[0]:
+                self._metadata_panel._on_rename_clicked()
+        elif action.startswith("status_"):
+            self._set_status_for(selected, action[len("status_"):])
+
+    def _jump_to_folder(self):
+        """Folder picker at the mouse cursor (Shift+B); works with the tree hidden too."""
+        from .dialogs.folder_picker_dialog import FolderPickerDialog
+        folders = [(f['id'], f.get('path') or f['name'])
+                   for f in self._db_service.get_all_folders() if f.get('parent_id')]
+        if not folders:
+            return
+        dialog = FolderPickerDialog(folders, title="Go to Folder", parent=self)  # opens at the cursor
+        if dialog.exec() == dialog.DialogCode.Accepted and dialog.selected_folder_id():
+            self._folder_tree.select_folder_id(dialog.selected_folder_id())
+
+    def _set_panel_visible(self, index: int, settings_key: str, visible: bool):
+        """Show/hide a splitter panel (0 = folder tree, 2 = info panel) and remember it."""
+        sizes = self._splitter.sizes()
+        if not visible and sizes[index] > 0:
+            self._panel_widths[index] = sizes[index]
+        self._splitter.widget(index).setVisible(bool(visible))
+        if visible:
+            sizes = self._splitter.sizes()
+            if sizes[index] < 50:  # came back collapsed: give it its old width from the grid
+                width = self._panel_widths.get(index, Config.DEFAULT_SPLITTER_SIZES[index])
+                sizes[1] = max(200, sizes[1] - (width - sizes[index]))
+                sizes[index] = width
+                self._splitter.setSizes(sizes)
+        QSettings(Config.APP_AUTHOR, Config.APP_NAME).setValue(settings_key, bool(visible))
+
+    def _set_status_for(self, uuids: List[str], status: str):
+        """Set the status on the selection; reuses the metadata panel path when it
+        shows one of the selected cards (badge + multi-selection handling)."""
+        shown = (self._metadata_panel._animation or {}).get('uuid')
+        if shown in uuids:
+            self._metadata_panel._on_status_selected(status)
+            return
+        for u in uuids:
+            if self._db_service.set_status(u, status):
+                self._event_bus.animation_updated.emit(u)
+
+    def _show_gradient_menu(self):
+        """Gradient presets + Custom... at the mouse cursor (shortcut G)."""
+        from PyQt6.QtGui import QCursor, QPixmap, QColor, QIcon
+        from ..utils.color_presets import GRADIENT_PRESETS
+        menu = QMenu(self)
+        for preset in GRADIENT_PRESETS:
+            pix = QPixmap(12, 12)
+            pix.fill(QColor(preset["icon"]))
+            act = menu.addAction(QIcon(pix), preset["name"])
+            act.triggered.connect(
+                lambda _=False, p=preset: self._on_gradient_preset_selected(p["name"], p["top"], p["bottom"]))
+        menu.addSeparator()
+        menu.addAction("Custom...").triggered.connect(self._on_custom_gradient_clicked)
+        menu.exec(QCursor.pos())
 
     def _open_documentation(self, page: str = None):
         """Open the local documentation in the user's default browser.

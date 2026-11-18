@@ -6,8 +6,10 @@ tree ('Adult/Baby' vs root 'Baby') and a name-only list can't tell them apart.
 """
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout,
+    QDialog, QDialogButtonBox, QLabel, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout,
 )
+
+from ...utils.popup_dialog import make_dismissable
 
 
 class FolderPickerDialog(QDialog):
@@ -19,6 +21,9 @@ class FolderPickerDialog(QDialog):
         self._folder_id = None
 
         layout = QVBoxLayout(self)
+        heading = QLabel(title)  # popup: no title bar, so the purpose is shown here
+        heading.setStyleSheet("font-weight: bold;")
+        layout.addWidget(heading)
         self._filter = QLineEdit()
         self._filter.setPlaceholderText("Filter folders...")
         self._filter.setClearButtonEnabled(True)
@@ -40,8 +45,11 @@ class FolderPickerDialog(QDialog):
 
         self._filter.textChanged.connect(self._apply_filter)
         self._filter.returnPressed.connect(self._accept_current)
-        self._list.itemDoubleClicked.connect(lambda _item: self._accept_current())
+        # One click picks the folder (arrow keys only move the highlight; Enter picks it).
+        self._list.itemClicked.connect(lambda _item: self._accept_current())
         self._filter.setFocus()
+        # Closes on a click outside (= Cancel); opens at the mouse cursor.
+        make_dismissable(self)
 
     def _apply_filter(self, text):
         needle = text.strip().lower()

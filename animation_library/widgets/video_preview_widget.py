@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 VideoPreviewWidget - Self-contained video preview with playback controls
 
@@ -91,10 +92,14 @@ class VideoPreviewWidget(QWidget):
         self._video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._video_label.setStyleSheet("background-color: transparent;")  # Transparent - no letterboxing
         self._video_label.setText("No preview loaded")
-        # Use Preferred policy so it can be sized to match video exactly
+        # LIS fork: Ignored, not Preferred + a fixed size per frame - a label locked to
+        # the first frame's size never followed the panel's splitter (stayed small, and
+        # also kept the splitter from shrinking it). The label now fills the space it is
+        # given and the frame is scaled into it, centered (get_video_display_rect()
+        # already accounts for the offset).
         self._video_label.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Preferred
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored
         )
 
         # Play/Pause toggle button
@@ -179,7 +184,7 @@ class VideoPreviewWidget(QWidget):
         layout.setSpacing(8)
 
         # Video display - centered in its container
-        layout.addWidget(self._video_label, 1, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._video_label, 1)
 
         # Control buttons row in a container widget (so it can be hidden)
         self._controls_widget = QWidget()
@@ -361,6 +366,17 @@ class VideoPreviewWidget(QWidget):
             self.pause()
             self.seek_to_frame(self._cv_frame_count - 1)
 
+    def resizeEvent(self, event):
+        """LIS fork: follow the panel / splitter size (debounced while dragging)."""
+        super().resizeEvent(event)
+        if not hasattr(self, '_resize_timer'):
+            from PyQt6.QtCore import QTimer
+            self._resize_timer = QTimer(self)
+            self._resize_timer.setSingleShot(True)
+            self._resize_timer.setInterval(40)
+            self._resize_timer.timeout.connect(self.recalculate_size)
+        self._resize_timer.start()
+
     def unlock_size(self):
         """Unlock size to allow recalculation on next frame display."""
         self._size_locked = False
@@ -515,8 +531,7 @@ class VideoPreviewWidget(QWidget):
             Qt.TransformationMode.SmoothTransformation
         )
 
-        # Resize label to exactly fit the scaled video (no black bars)
-        self._video_label.setFixedSize(new_w, new_h)
+        # LIS fork: no setFixedSize - the label keeps filling its area (see _create_widgets)
         self._video_label.setPixmap(scaled)
         return True
 

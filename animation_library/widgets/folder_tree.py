@@ -787,6 +787,98 @@ class FolderTree(QTreeWidget):
                 self._icon_service.set_folder_icon(folder_path, selected_icon)
                 self._load_folders()  # Reload to show new icon
 
+    # ---- Keyboard navigation (LIS fork) -------------------------------------------
+    # Only the user's folders take part; the built-in top-level items (Home, Actions,
+    # Archive, ...) are left alone, and so is the root level when going up.
+
+    def _user_item(self, item):
+        data = item.data(0, Qt.ItemDataRole.UserRole) if item else None
+        return bool(data) and data.get('type') == 'user'
+
+    def _find_item(self, folder_id):
+        stack = [self.topLevelItem(i) for i in range(self.topLevelItemCount())]
+        while stack:
+            item = stack.pop()
+            if self._user_item(item) and getattr(item, 'folder_id', None) == folder_id:
+                return item
+            stack.extend(item.child(i) for i in range(item.childCount()))
+        return None
+
+    def _go_to_item(self, item):
+        parent = item.parent()
+        while parent:
+            parent.setExpanded(True)
+            parent = parent.parent()
+        self.setCurrentItem(item)  # selection change -> folder_selected
+        self.scrollToItem(item)
+
+    def select_folder_id(self, folder_id) -> bool:
+        item = self._find_item(folder_id)
+        if item:
+            self._go_to_item(item)
+        return item is not None
+
+    def _builtin_items(self):
+        """The built-in folders above the first separator (Home, Actions, Poses, ...)."""
+        items = []
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if not data:  # separator
+                break
+            if data.get('type') == 'virtual':
+                items.append(item)
+        return items
+
+    def navigate(self, direction: str):
+        """direction: 'next' / 'prev' (same level), 'up' (parent), 'down' (first child).
+
+        The built-in folders (Home, Actions, Poses, ...) are one level above the user
+        folders: left/right moves between them, down goes to the first user folder,
+        and up from a top-level user folder goes to Home. Nothing happens at the
+        edges; Archive / Trash are left out.
+        """
+        items = self.selectedItems()
+        current = items[0] if items else None
+        if current is None:
+            return
+        builtins = self._builtin_items()
+
+        if current in builtins:
+            if direction in ('next', 'prev'):
+                idx = builtins.index(current) + (1 if direction == 'next' else -1)
+                if 0 <= idx < len(builtins):
+                    self._go_to_item(builtins[idx])
+            elif direction == 'down':
+                top_user = [self.topLevelItem(i) for i in range(self.topLevelItemCount())]
+                top_user = [s for s in top_user if self._user_item(s)]
+                if top_user:
+                    self._go_to_item(top_user[0])
+            return
+
+        if not self._user_item(current):
+            return
+        if direction in ('next', 'prev'):
+            parent = current.parent()
+            if parent:
+                siblings = [parent.child(i) for i in range(parent.childCount())]
+            else:
+                siblings = [self.topLevelItem(i) for i in range(self.topLevelItemCount())]
+            siblings = [s for s in siblings if self._user_item(s)]
+            idx = siblings.index(current) + (1 if direction == 'next' else -1)
+            if 0 <= idx < len(siblings):
+                self._go_to_item(siblings[idx])
+        elif direction == 'up':
+            parent = current.parent()
+            if parent and self._user_item(parent):
+                self._go_to_item(parent)
+            elif parent is None and builtins:
+                self._go_to_item(builtins[0])  # top-level user folder -> Home
+        elif direction == 'down':
+            if current.childCount():
+                current.setExpanded(True)
+                self._go_to_item(current.child(0))
+
     def refresh(self):
         """Refresh folder tree"""
         self._load_folders()

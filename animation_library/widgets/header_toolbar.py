@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 HeaderToolbar - Main toolbar with search and controls
 
@@ -8,9 +9,9 @@ Inspired by: Current animation_library toolbar
 import os
 
 from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QLineEdit, QPushButton,
+    QWidget, QHBoxLayout, QGridLayout, QLineEdit, QPushButton,
     QSlider, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QFrame, QMenu
+    QFrame, QMenu, QStylePainter, QStyleOptionComboBox, QStyle
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QSize
 from PyQt6.QtGui import QIcon
@@ -98,6 +99,41 @@ class IdentityPill(QFrame):
         super().mousePressEvent(event)
 
 
+class _LocationCombo(QComboBox):
+    """Combo whose text is cut only at one EDGE of the box (no ellipsis in the middle).
+
+    ElideRight keeps the start (library name), ElideLeft keeps the end of a path
+    (the folder you are in). The text is elided to exactly the field's width, so the
+    style never shortens it again its own way.
+    """
+
+    def __init__(self, elide=Qt.TextElideMode.ElideRight, parent=None):
+        super().__init__(parent)
+        self._elide = elide
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+        field = self.style().subControlRect(
+            QStyle.ComplexControl.CC_ComboBox, opt, QStyle.SubControl.SC_ComboBoxEditField, self)
+        opt.currentText = self.fontMetrics().elidedText(
+            opt.currentText, self._elide, max(10, field.width() - 4))
+        painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
+
+
+class _ClickCombo(_LocationCombo):
+    """Looks like the library combo, but a click emits `clicked` instead of a dropdown."""
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(Qt.TextElideMode.ElideLeft, parent)
+
+    def showPopup(self):
+        self.clicked.emit()
+
+
 class HeaderToolbar(QWidget):
     """
     Header toolbar with search and view controls
@@ -142,9 +178,19 @@ class HeaderToolbar(QWidget):
     sort_changed = pyqtSignal(str, str)  # (sort_by, sort_order)
     help_clicked = pyqtSignal()  # Help button clicked
     identity_pill_clicked = pyqtSignal()  # Identity pill clicked → open Settings → Identity
+    folder_picker_requested = pyqtSignal()    # LIS fork: click on "Current Folder"
+    folders_panel_toggled = pyqtSignal(bool)  # LIS fork: show/hide folder tree
+    info_panel_toggled = pyqtSignal(bool)     # LIS fork: show/hide info (metadata + apply) panel
 
     def __init__(self, parent=None, db_service=None, event_bus=None, theme_manager=None):
         super().__init__(parent)
+
+        # LIS fork: library / folder boxes stacked in the 50px header
+        self.LOCATION_WIDTH = 340        # max width of the library / folder boxes
+        self.LOCATION_MIN_WIDE = 230     # kept until everything else has given way
+        self.LOCATION_MIN_TIGHT = 120
+        self.LOCATION_HEIGHT = 21
+        self.LOCATION_QSS = "QComboBox { padding: 1px 6px; font-size: 8pt; }"
 
         # Set header property for theme-based styling (orange gradient)
         self.setProperty("header", "true")
@@ -185,8 +231,31 @@ class HeaderToolbar(QWidget):
         icon_color = theme.palette.header_icon_color if theme else "#1a1a1a"
 
         # Library picker - which library everything else in this bar applies to
-        self._library_combo = QComboBox()
-        self._library_combo.setFixedWidth(190)
+        self._library_combo = _LocationCombo(Qt.TextElideMode.ElideRight)
+        self._flex(self._library_combo, self.LOCATION_MIN_WIDE, self.LOCATION_WIDTH)
+        self._library_combo.setFixedHeight(self.LOCATION_HEIGHT)
+        self._library_combo.setStyleSheet(self.LOCATION_QSS)
+
+        # LIS fork: "Current Folder" under the library picker - same look, shows the
+        # path of the folder being viewed; clicking it opens the folder picker.
+        self._folder_combo = _ClickCombo()
+        self._flex(self._folder_combo, self.LOCATION_MIN_WIDE, self.LOCATION_WIDTH)
+        self._folder_combo.setFixedHeight(self.LOCATION_HEIGHT)
+        self._folder_combo.setStyleSheet(self.LOCATION_QSS)
+        self._folder_combo.setToolTip("Go to folder (Shift+B)")
+        # Never takes keyboard focus: a focused combo opens on Alt+Down, which here
+        # would pop the folder picker instead of the Alt+arrow folder navigation.
+        self._folder_combo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._folder_combo.clicked.connect(self.folder_picker_requested.emit)
+        self._folder_path = ""
+        self._library_label = QLabel("Current Library:")
+        self._folder_label = QLabel("Current Folder:")
+        for lbl in (self._library_label, self._folder_label):
+            lbl.setStyleSheet(f"color: {icon_color}; font-size: 8pt;")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            # Fixed: the label column must not soak up spare width (it opened a big
+            # gap between the folder-tree button and the labels).
+            lbl.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         self._library_combo.setToolTip(
             "Switch animation library\nRight-click to forget a library"
         )
@@ -198,7 +267,8 @@ class HeaderToolbar(QWidget):
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Search...")
         self._search_box.setClearButtonEnabled(True)
-        self._search_box.setFixedWidth(200)  # Match old repo
+        self._search_box.setMinimumWidth(100)  # LIS fork: flexible, was fixed 200
+        self._search_box.setMaximumWidth(260)
 
         # Refresh library button (icon-only)
         self._refresh_btn = QPushButton()
@@ -229,6 +299,22 @@ class HeaderToolbar(QWidget):
         self._view_mode_btn.setChecked(self._view_mode == "grid")
         self._view_mode_btn.setToolTip("Toggle Grid/List View")
 
+        # Panel toggles (LIS fork): folder tree on the left, info panel on the right
+        self._folders_btn = QPushButton()
+        self._folders_btn.setIcon(colorize_white_svg(IconLoader.get("panel_left"), icon_color))
+        self._folders_btn.setIconSize(QSize(20, 20))
+        self._folders_btn.setFixedSize(32, 32)
+        self._folders_btn.setCheckable(True)
+        self._folders_btn.setChecked(True)
+        self._folders_btn.setToolTip("Show/Hide Folder Tree (B)")
+        self._info_btn = QPushButton()
+        self._info_btn.setIcon(colorize_white_svg(IconLoader.get("panel_right"), icon_color))
+        self._info_btn.setIconSize(QSize(20, 20))
+        self._info_btn.setFixedSize(32, 32)
+        self._info_btn.setCheckable(True)
+        self._info_btn.setChecked(True)
+        self._info_btn.setToolTip("Show/Hide Info Panel (I)")
+
         # Card size slider with grid icon
         self._grid_icon_label = QLabel()
         grid_icon_path = IconLoader.get("resize_grid")
@@ -248,7 +334,42 @@ class HeaderToolbar(QWidget):
 
         # Animated previews toggle. LABELLED, not a bare glyph: as a 32px "play"
         # icon squeezed between the view controls it was effectively invisible.
-        self._animated_btn = QPushButton("▶ Previews")
+        # LIS fork: preview playback preset FS1-FS4, left of the Previews button.
+        from ..services.sprite_playback import get_sprite_playback
+        self._preview_speed_combo = QComboBox()
+        self._preview_speed_combo.setToolTip(
+            "Preview playback preset FS1-FS4 (Frame Skip), edited in Settings > Appearance")
+        mode = get_sprite_playback().get_mode()
+        for i in range(1, 5):
+            self._preview_speed_combo.addItem(f"FS{i}", f"fs{i}")
+            if mode == f"fs{i}":
+                self._preview_speed_combo.setCurrentIndex(i - 1)
+        # Small, like the library / folder boxes (the header font made it a big button)
+        # 31 px (half the first version): no drop-down arrow, the text alone ("FS1")
+        self._preview_speed_combo.setStyleSheet(
+            "QComboBox { padding: 1px 2px; font-size: 8pt; }"
+            "QComboBox::drop-down { width: 0px; border: none; }"
+            "QComboBox::down-arrow { image: none; width: 0px; }"
+            # List items the same size as the box (the theme's 4px 8px item padding
+            # left no room for the text in a 31 px wide list)
+            "QComboBox QAbstractItemView { font-size: 8pt; padding: 0px; }"
+            "QComboBox QAbstractItemView::item { padding: 0px 2px; min-height: 22px;"
+            " max-height: 22px; border: none; }")
+        self._preview_speed_combo.setFixedSize(31, 22)
+        _view = self._preview_speed_combo.view()
+        _view.setFixedWidth(31)
+        # Never "FS…": no elision, no frame / scrollbar eating the few pixels there are
+        _view.setTextElideMode(Qt.TextElideMode.ElideNone)
+        _view.setFrameShape(QFrame.Shape.NoFrame)
+        _view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        _view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._preview_speed_combo.currentIndexChanged.connect(
+            lambda _i: get_sprite_playback().set_mode(self._preview_speed_combo.currentData()))
+
+        # LIS fork: play / pause icon instead of a "▶" glyph, so the state is visible
+        self._animated_btn = QPushButton(" Previews")
+        self._animated_btn.setIconSize(QSize(14, 14))
+        self._previews_icon_color = icon_color
         self._animated_btn.setFixedHeight(32)
         self._animated_btn.setMinimumWidth(96)
         self._animated_btn.setCheckable(True)
@@ -333,13 +454,13 @@ class HeaderToolbar(QWidget):
         # Rig type filter dropdown
         self._rig_type_combo = QComboBox()
         self._rig_type_combo.addItem("All Rig Types")
-        self._rig_type_combo.setFixedWidth(140)
+        self._flex(self._rig_type_combo, 80, 140)
         self._rig_type_combo.setToolTip("Filter by Rig Type")
 
         # Tags filter dropdown (shows all tags, multiple can be selected via dialog)
         self._tags_combo = QComboBox()
         self._tags_combo.addItem("All Tags")
-        self._tags_combo.setFixedWidth(120)
+        self._flex(self._tags_combo, 80, 140)
         self._tags_combo.setToolTip("Filter by Tags")
 
         # Sort dropdown
@@ -351,43 +472,69 @@ class HeaderToolbar(QWidget):
         self._sort_combo.addItem("Sort: Duration ↑", ("duration_seconds", "ASC"))
         self._sort_combo.addItem("Sort: Duration ↓", ("duration_seconds", "DESC"))
         self._sort_combo.addItem("Sort: Recent", ("last_viewed_date", "DESC"))
-        self._sort_combo.setFixedWidth(140)
+        self._flex(self._sort_combo, 80, 150)
         self._sort_combo.setToolTip("Sort Animations")
 
     def _create_layout(self):
-        """Create toolbar layout with filters and sorting"""
+        """Create toolbar layout with filters and sorting.
+
+        LIS fork: every gap is a named spacer (self._gaps) so a narrow window can
+        squeeze the gaps first, see _fit_to_width().
+        """
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 0, 15, 0)  # Match old repo: 15px left/right
-        layout.setSpacing(8)
+        layout.setSpacing(0)  # all spacing comes from the gaps below
+        self._gaps = []
 
-        # ===== SECTION 0: FAR LEFT - Which library =====
-        layout.addWidget(self._library_combo)
-        layout.addSpacing(16)
+        def gap(width):
+            item = QSpacerItem(width, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+            layout.addSpacerItem(item)
+            self._gaps.append((item, width))
+
+        # ===== SECTION 0: FAR LEFT - Folder tree toggle, which library =====
+        layout.addWidget(self._folders_btn)
+        gap(8)
+        location = QGridLayout()
+        location.setContentsMargins(0, 0, 0, 0)
+        location.setHorizontalSpacing(6)
+        location.setVerticalSpacing(2)
+        location.setColumnStretch(0, 0)
+        location.setColumnStretch(1, 1)
+        location.addWidget(self._library_label, 0, 0)
+        location.addWidget(self._library_combo, 0, 1)
+        location.addWidget(self._folder_label, 1, 0)
+        location.addWidget(self._folder_combo, 1, 1)
+        layout.addLayout(location, 3)
+        gap(16)
 
         # ===== SECTION 1: LEFT - Creation =====
         layout.addWidget(self._new_folder_btn)
-        layout.addSpacing(16)  # Space after New Folder
+        gap(16)  # Space after New Folder
 
         # ===== SECTION 2: MIDDLE-LEFT - Search & Filters =====
-        layout.addWidget(self._search_box)
-        layout.addSpacing(4)
-        layout.addWidget(self._rig_type_combo)
-        layout.addWidget(self._tags_combo)
-        layout.addWidget(self._sort_combo)
-        layout.addSpacing(24)  # Space after filters
+        layout.addWidget(self._search_box, 2)
+        gap(8)
+        layout.addWidget(self._rig_type_combo, 1)
+        gap(8)
+        layout.addWidget(self._tags_combo, 1)
+        gap(8)
+        layout.addWidget(self._sort_combo, 1)
+        gap(24)  # Space after filters
 
         # ===== SECTION 3: MIDDLE-RIGHT - View & Edit Controls (grouped) =====
-        # Group with tight spacing (4px between items)
-        layout.addWidget(self._view_mode_btn)  # Moved from position 2 to here
-        layout.addSpacing(4)
+        layout.addWidget(self._view_mode_btn)
+        gap(4)
+        layout.addWidget(self._preview_speed_combo)
+        gap(2)
         layout.addWidget(self._animated_btn)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._grid_icon_label)
+        gap(8)
         layout.addWidget(self._size_slider)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._edit_mode_btn)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._refresh_btn)
 
         # Stretch spacer to push right buttons to far right
@@ -396,18 +543,20 @@ class HeaderToolbar(QWidget):
         # ===== SECTION 4: RIGHT - Archive, Identity & System Buttons =====
         # Archive button separated from refresh to prevent accidental clicks
         layout.addWidget(self._delete_btn)
-        layout.addSpacing(16)  # Extra spacing before identity pill
+        gap(16)  # Extra spacing before identity pill
         layout.addWidget(self._identity_pill)
-        layout.addSpacing(12)  # Space between pill and system buttons
+        gap(12)  # Space between pill and system buttons
         layout.addWidget(self._docs_btn)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._about_btn)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._console_btn)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._help_btn)
-        layout.addSpacing(4)
+        gap(4)
         layout.addWidget(self._settings_btn)
+        gap(8)
+        layout.addWidget(self._info_btn)  # far right, next to the panel it toggles
 
     def _connect_signals(self):
         """Connect internal signals"""
@@ -422,6 +571,10 @@ class HeaderToolbar(QWidget):
 
         # Search box
         self._search_box.textChanged.connect(self._on_search_text_changed)
+
+        # Panel toggles (LIS fork)
+        self._folders_btn.toggled.connect(self.folders_panel_toggled.emit)
+        self._info_btn.toggled.connect(self.info_panel_toggled.emit)
 
         # Refresh button
         self._refresh_btn.clicked.connect(self._on_refresh_clicked)
@@ -438,6 +591,8 @@ class HeaderToolbar(QWidget):
         # Edit mode button
         self._edit_mode_btn.clicked.connect(self._on_edit_mode_clicked)
         self._animated_btn.toggled.connect(self.animated_previews_toggled.emit)
+        self._animated_btn.toggled.connect(lambda _on: self._update_previews_icon())
+        self._update_previews_icon()
 
         # Delete button
         self._delete_btn.clicked.connect(self._on_delete_clicked)
@@ -511,6 +666,12 @@ class HeaderToolbar(QWidget):
 
         view_mode_icon = colorize_white_svg(IconLoader.get("view_mode"), icon_color)
         self._view_mode_btn.setIcon(view_mode_icon)
+        self._folders_btn.setIcon(colorize_white_svg(IconLoader.get("panel_left"), icon_color))
+        self._info_btn.setIcon(colorize_white_svg(IconLoader.get("panel_right"), icon_color))
+        for lbl in (self._library_label, self._folder_label):
+            lbl.setStyleSheet(f"color: {icon_color}; font-size: 8pt;")
+        self._previews_icon_color = icon_color
+        self._update_previews_icon()
 
         grid_icon = colorize_white_svg(IconLoader.get("resize_grid"), icon_color)
         self._grid_icon_label.setPixmap(grid_icon.pixmap(20, 20))
@@ -534,6 +695,96 @@ class HeaderToolbar(QWidget):
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
+
+    # ---- Responsive header (LIS fork) ---------------------------------------------
+    # Text boxes stretch between a minimum and their old width; when even the
+    # minimums don't fit, the least important items are hidden one by one (and come
+    # back as the window grows), so nothing overlaps any more.
+
+    @staticmethod
+    def _flex(combo, min_w, max_w):
+        combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        combo.setMinimumContentsLength(4)
+        combo.setMinimumWidth(min_w)
+        combo.setMaximumWidth(max_w)
+        combo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def _optional_groups(self):
+        """Hidden first -> last when the header is too narrow (after the gaps are gone)."""
+        return [
+            [self._grid_icon_label, self._size_slider],   # Num -/+ still work
+            [self._console_btn],
+            [self._about_btn],
+            [self._docs_btn],                             # F1 still works
+            [self._library_label, self._folder_label],
+        ]
+
+    def _fits(self):
+        layout = self.layout()
+        layout.invalidate()
+        return layout.minimumSize().width() <= self.width()
+
+    def _fit_to_width(self):
+        """Squeeze in priority order until the header fits:
+        1. gaps and side margins, 2. search / filters (they shrink to their minimum
+        on their own), 3. hide optional items one group at a time, 4. last of all
+        let the library / folder boxes go below their comfortable width."""
+        layout = self.layout()
+        # Start from the roomy layout
+        layout.setContentsMargins(15, 0, 15, 0)
+        for item, width in self._gaps:
+            item.changeSize(width, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        for combo in (self._library_combo, self._folder_combo):
+            combo.setMinimumWidth(self.LOCATION_MIN_WIDE)
+        groups = self._optional_groups()
+        for group in groups:
+            for w in group:
+                w.setVisible(True)
+
+        if not self._fits():
+            layout.setContentsMargins(4, 0, 4, 0)
+            for item, width in self._gaps:
+                item.changeSize(min(width, 2), 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        for group in groups:
+            if self._fits():
+                break
+            for w in group:
+                w.setVisible(False)
+        if not self._fits():
+            for combo in (self._library_combo, self._folder_combo):
+                combo.setMinimumWidth(self.LOCATION_MIN_TIGHT)
+        self._elide_folder()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit_to_width()
+
+    def _elide_folder(self):
+        # Full path; _LocationCombo cuts it at the left edge when painting.
+        if self._folder_combo.count() == 0:
+            self._folder_combo.addItem(self._folder_path)
+        else:
+            self._folder_combo.setItemText(0, self._folder_path)
+
+    def _update_previews_icon(self):
+        """Icon shows the current STATE: play triangle while previews play, pause bars while off."""
+        name = "play" if self._animated_btn.isChecked() else "pause"
+        self._animated_btn.setIcon(colorize_white_svg(IconLoader.get(name), self._previews_icon_color))
+        self._animated_btn.setToolTip(
+            ("Previews are playing - click to stop. " if self._animated_btn.isChecked()
+             else "Play each card's preview in the grid. ")
+            + "Previews are prepared the first time you view them. (P)")
+
+    def set_current_folder(self, path: str):
+        """Show the folder being viewed (full path in the tooltip, left-elided in the box)."""
+        self._folder_path = path or ""
+        self._elide_folder()
+        self._folder_combo.setToolTip(f"{self._folder_path}\nClick or Shift+B: go to folder")
+
+    def set_panel_buttons(self, folders_visible: bool, info_visible: bool):
+        """Restore the saved panel visibility; emits the toggled signals only if a state changes."""
+        self._folders_btn.setChecked(bool(folders_visible))
+        self._info_btn.setChecked(bool(info_visible))
 
     def refresh_mode(self):
         """Refresh button appearance when operation mode changes."""
@@ -587,6 +838,7 @@ class HeaderToolbar(QWidget):
         self._animated_btn.blockSignals(True)
         self._animated_btn.setChecked(bool(enabled))
         self._animated_btn.blockSignals(False)
+        self._update_previews_icon()
 
     def get_card_size(self) -> int:
         """Current card size - for persisting across sessions."""

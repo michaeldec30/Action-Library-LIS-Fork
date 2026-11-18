@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 ThumbnailLoader - Async thumbnail loading with QThreadPool
 
@@ -217,7 +218,9 @@ class ThumbnailLoader(QObject):
             gradient_top,
             gradient_bottom,
             cache_key,
-            canvas_size=Config.THUMBNAIL_SIZE
+            # LIS fork: render at the largest card size so big cards stay sharp
+            # (stored thumbnails are 1024 px; 300 px got upscaled on 440 px cards).
+            canvas_size=max(Config.THUMBNAIL_SIZE, Config.MAX_CARD_SIZE)
         )
 
         # Connect signals

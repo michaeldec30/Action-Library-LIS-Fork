@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 Application update: check GitHub for a newer release, download it, stage it.
 
@@ -32,7 +33,9 @@ from ..config import Config
 
 logger = logging.getLogger(__name__)
 
-REPO = "CGstuff/Action-Library"
+# LIS fork: check the fork's own releases. Upstream releases would offer to replace
+# the fork with the original app (and with it every fork change).
+REPO = "michaeldec30/Action-Library-LIS-Fork"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases"
 
 # The ONLY things an update may replace. Everything else in the install folder

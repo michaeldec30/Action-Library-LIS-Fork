@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 SettingsDialog - Application settings dialog for Animation Library v2
 
@@ -7,7 +8,7 @@ Pattern: QDialog with sidebar list + stacked pages (Photoshop/Blender style)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
-    QStackedWidget, QDialogButtonBox, QFrame
+    QStackedWidget, QDialogButtonBox, QFrame, QScrollArea, QApplication
 )
 
 from ...config import Config
@@ -18,6 +19,7 @@ from .library_tab import LibraryTab
 from .maintenance_tab import MaintenanceTab
 from .studio_mode_tab import StudioModeTab
 from .identity_tab import IdentityTab
+from .shortcuts_tab import ShortcutsTab
 
 
 class SettingsDialog(QDialog):
@@ -44,10 +46,27 @@ class SettingsDialog(QDialog):
 
         self.setWindowTitle(f"Settings - {Config.APP_NAME}")
         self.setModal(True)
-        self.resize(820, 560)
+        self.resize(900, 860)  # LIS fork: was 820x560; capped to the screen in showEvent()
 
         self._tabs = []  # list of (label, widget) for index lookup
         self._create_ui()
+        self.setMinimumSize(560, 320)
+
+    def showEvent(self, event):
+        # LIS fork: never open taller / wider than the screen's free area.
+        super().showEvent(event)
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen:
+            area = screen.availableGeometry()
+            w = min(self.width(), area.width() - 40)
+            h = min(self.height(), area.height() - 60)
+            if (w, h) != (self.width(), self.height()):
+                self.resize(w, h)
+            frame = self.frameGeometry()
+            if not area.contains(frame):
+                x = min(max(area.left(), frame.left()), area.right() - frame.width())
+                y = min(max(area.top(), frame.top()), area.bottom() - frame.height())
+                self.move(x, y)
 
     def _create_ui(self):
         """Create UI layout"""
@@ -91,11 +110,13 @@ class SettingsDialog(QDialog):
         self.maintenance_tab = MaintenanceTab(self.theme_manager, self)
         self.studio_mode_tab = StudioModeTab(self.theme_manager, self)
         self.identity_tab = IdentityTab(self.theme_manager, self)
+        self.shortcuts_tab = ShortcutsTab(self.theme_manager, self)
 
         for label, widget in [
             ("Storage Locations",   self.storage_tab),
             ("Blender Integration", self.blender_tab),
             ("Appearance",          self.theme_tab),
+            ("Shortcuts",           self.shortcuts_tab),
             ("Backup",              self.library_tab),
             ("Maintenance",         self.maintenance_tab),
             ("Operation Mode",      self.studio_mode_tab),
@@ -145,7 +166,14 @@ class SettingsDialog(QDialog):
         item = QListWidgetItem(label)
         item.setSizeHint(QSize(self.SIDEBAR_WIDTH, 32))
         self._sidebar.addItem(item)
-        self._stack.addWidget(widget)
+        # LIS fork: each page scrolls, so the dialog is not forced to the height of
+        # its tallest page (Apply/OK ended up below the screen edge).
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setWidget(widget)
+        self._stack.addWidget(scroll)
         self._tabs.append((label, widget))
 
     def _sidebar_qss(self) -> str:
@@ -205,6 +233,7 @@ class SettingsDialog(QDialog):
         self.theme_tab.save_settings()
         self.studio_mode_tab.save_settings()
         self.identity_tab.save_settings()
+        self.shortcuts_tab.save_settings()
 
     def accept(self):
         """Handle OK button - save and close"""

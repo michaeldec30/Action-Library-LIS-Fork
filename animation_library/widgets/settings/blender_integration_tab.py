@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 BlenderIntegrationTab - Blender integration settings for Animation Library v2
 
@@ -191,7 +192,7 @@ class BlenderIntegrationTab(QWidget):
         self.socket_port_input = QSpinBox()
         self.socket_port_input.setRange(1024, 65535)
         self.socket_port_input.setValue(self.socket_port)
-        self.socket_port_input.setFixedWidth(100)
+        self.socket_port_input.setFixedWidth(130)  # LIS fork: was 100, value hidden by the buttons
         port_layout.addWidget(self.socket_port_input)
 
         port_layout.addStretch()

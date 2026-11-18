@@ -1,3 +1,4 @@
+# Modified in Action Library LIS Fork, 2026-11 (based on Action Library 1.6.2 by CGstuff). See FORK_CHANGES.md.
 """
 SpritePlaybackService - animated cards in the grid.
 
@@ -36,6 +37,13 @@ from . import preview_sprites
 logger = logging.getLogger(__name__)
 
 DEFAULT_FPS = 15
+# LIS fork: playback presets. The original pace - one sheet frame per tick at 15 fps,
+# whatever the clip's length - made configurable: four "Frame Skip" presets, each
+# (show every N-th sheet frame, frames per second), edited in Settings > Appearance
+# and picked in the header. FS1 = the original. (A real-time mode was tried and
+# dropped: with at most 24 frames per sheet it looked choppier than this.)
+PREVIEW_MODE_KEY = "view/preview_mode"        # "fs1".."fs4"
+DEFAULT_FS_PRESETS = [(1, 15), (1, 30), (2, 15), (2, 30)]
 # Keep a little beyond the visible set so a small scroll doesn't rebuild.
 # Animated previews are on out of the box. Measured at 1000 animations the
 # grid costs ~0.3% of a core and holds ~75MB of sheets, both bounded by
@@ -90,6 +98,16 @@ class SpritePlaybackService(QObject):
 
         self._tick_count = 0
         self._builds_since_prune = 0
+        from PyQt6.QtCore import QSettings
+        s = QSettings(Config.APP_AUTHOR, Config.APP_NAME)
+        self._mode = s.value(PREVIEW_MODE_KEY, "fs1", type=str)
+        if self._mode not in ("fs1", "fs2", "fs3", "fs4"):  # older values ("time", "fs")
+            self._mode = "fs1"
+        self._fs_presets = []
+        for i, (step, fps) in enumerate(DEFAULT_FS_PRESETS, start=1):
+            self._fs_presets.append((
+                max(1, s.value(f"view/fs{i}_step", step, type=int)),
+                max(1, s.value(f"view/fs{i}_fps", fps, type=int))))
         # A dedicated pool, deliberately not the global one. Sheet building is
         # the heaviest thing this app does (video decode per clip) and it is
         # pure nicety - it must never compete with thumbnail loading, and it
@@ -118,7 +136,7 @@ class SpritePlaybackService(QObject):
                 preview_sprites.prune_cache()
             except Exception as e:
                 logger.debug(f"Sprite cache prune failed: {e}")
-            self._timer.start(int(1000 / self._fps))
+            self._timer.start(self._tick_interval())
         else:
             self._timer.stop()
             self._clear()
@@ -131,7 +149,41 @@ class SpritePlaybackService(QObject):
 
     def resume(self):
         if self._enabled and not self._timer.isActive():
-            self._timer.start(int(1000 / self._fps))
+            self._timer.start(self._tick_interval())
+
+    def get_mode(self) -> str:
+        return self._mode
+
+    def set_mode(self, mode: str):
+        """Pick preset "fs1".."fs4"; saved for next start."""
+        from PyQt6.QtCore import QSettings
+        self._mode = mode
+        QSettings(Config.APP_AUTHOR, Config.APP_NAME).setValue(PREVIEW_MODE_KEY, mode)
+        self._restart_timer()
+
+    def get_fs_presets(self):
+        """[(step, fps)] for FS1..FS4."""
+        return list(self._fs_presets)
+
+    def set_fs_preset(self, index: int, step: int, fps: int):
+        """Edit preset FS<index> (1-based): every `step`-th sheet frame at `fps`."""
+        from PyQt6.QtCore import QSettings
+        self._fs_presets[index - 1] = (max(1, int(step)), max(1, int(fps)))
+        s = QSettings(Config.APP_AUTHOR, Config.APP_NAME)
+        s.setValue(f"view/fs{index}_step", self._fs_presets[index - 1][0])
+        s.setValue(f"view/fs{index}_fps", self._fs_presets[index - 1][1])
+        self._restart_timer()
+
+    def _active_fs(self):
+        """(step, fps) of the selected preset."""
+        return self._fs_presets[int(self._mode[2:]) - 1]
+
+    def _tick_interval(self) -> int:
+        return max(1, int(1000 / self._active_fs()[1]))
+
+    def _restart_timer(self):
+        if self._timer.isActive():
+            self._timer.start(self._tick_interval())
 
     def set_frame_size(self, size: int):
         """Card size changed; sheets are size-specific so start over."""
@@ -224,7 +276,8 @@ class SpritePlaybackService(QObject):
         count = meta.get('count') or 0
         if count <= 0:
             return None
-        frame = (self._tick_count + self._phase.get(uuid, 0)) % count
+        # One tick = `step` sheet frames of the selected preset (LIS fork)
+        frame = (self._tick_count * self._active_fs()[0] + self._phase.get(uuid, 0)) % count
         size = meta['frame_size']
         row, col = divmod(frame, meta['columns'])
         return pixmap, QRect(col * size, row * size, size, size)
